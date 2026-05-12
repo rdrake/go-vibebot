@@ -65,5 +65,13 @@ func (a *Adapter) Run(ctx context.Context, t mcpsdk.Transport) error {
 // registerTools and registerResources are implemented in tools.go and
 // resources.go. Empty stubs here keep New compiling until later tasks add
 // the real registrations.
-func (a *Adapter) registerTools()     {}
+func (a *Adapter) registerTools() {
+	mcpsdk.AddTool(a.server,
+		&mcpsdk.Tool{
+			Name:        "inject",
+			Description: "Inject a scenario event into a scene. scene_id empty = default scene.",
+		},
+		a.injectHandler,
+	)
+}
 func (a *Adapter) registerResources() {}
