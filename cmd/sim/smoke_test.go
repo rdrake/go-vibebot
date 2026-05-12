@@ -159,3 +159,157 @@ func TestRunCtxAbortsBootOnHydrateFailure(t *testing.T) {
 func TestRunCtxPersistsAndHydratesRoundTrip(t *testing.T) {
 	t.Skip("TODO: round-trip integration test (see plan Step 8.5)")
 }
+
+// TestSummonCathedralInjectAndSpeak boots the full runtime wiring (real
+// seed YAML, echoLLM, SQLite, place loader), summons the cathedral, and
+// injects a scenario scoped to the cathedral scene. It asserts:
+//   - !summon succeeds (no error)
+//   - the inject produces speech from at least one cathedral NPC
+//   - the synthesized event is attributed to the cathedral's leader (vicar)
+//   - the gang scene is undisturbed: zero events with the gang scene id
+func TestSummonCathedralInjectAndSpeak(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	seedDir := filepath.Join("..", "..", "seed")
+	chars, err := config.LoadCharacters(filepath.Join(seedDir, "characters.yaml"))
+	if err != nil {
+		t.Fatalf("load characters: %v", err)
+	}
+	groups, err := config.LoadGroups(filepath.Join(seedDir, "groups.yaml"))
+	if err != nil {
+		t.Fatalf("load groups: %v", err)
+	}
+	places, err := config.LoadPlaces(filepath.Join(seedDir, "places"))
+	if err != nil {
+		t.Fatalf("load places: %v", err)
+	}
+	if verr := config.Validate(chars, groups, places); verr != nil {
+		t.Fatalf("validate: %v", verr)
+	}
+	if len(places) == 0 {
+		t.Fatal("no places loaded; seed/places empty?")
+	}
+
+	llmImpl := echoLLM{}
+
+	byID := make(map[api.CharacterID]*character.Character, len(chars))
+	for _, spec := range chars {
+		id := api.CharacterID(spec.ID)
+		byID[id] = &character.Character{
+			ID:           id,
+			Name:         spec.Name,
+			Persona:      spec.Persona,
+			Capabilities: spec.Capabilities,
+			Blurb:        spec.Blurb,
+			Memory:       memory.NewEmbedded(llmImpl, 200),
+			Inbox:        make(chan character.Perception, 8),
+		}
+	}
+
+	w := world.New(world.Config{TickInterval: time.Hour}, st, llmImpl)
+
+	// Gang scene first so it remains the default.
+	g := groups[0]
+	gang := &scene.Scene{ID: api.SceneID(g.ID), Router: scene.LLMRouter{Model: llmImpl}}
+	for _, mid := range g.Members {
+		gang.Members = append(gang.Members, byID[api.CharacterID(mid)])
+	}
+	gang.Leader = byID[api.CharacterID(g.Leader)]
+	w.RegisterScene(gang)
+
+	var cathedralSceneID api.SceneID
+	var cathedralLeader api.CharacterID
+	npcIDs := map[api.CharacterID]struct{}{}
+	for _, p := range places {
+		if p.ID != "cathedral" {
+			continue
+		}
+		sc := &scene.Scene{
+			ID:      api.SceneID("place:" + p.ID),
+			PlaceID: api.PlaceID(p.ID),
+			Router:  scene.LLMRouter{Model: llmImpl},
+		}
+		for _, nid := range p.NPCs {
+			c, ok := byID[api.CharacterID(nid)]
+			if !ok {
+				t.Fatalf("place %s npc %s not in characters", p.ID, nid)
+			}
+			sc.Members = append(sc.Members, c)
+			npcIDs[c.ID] = struct{}{}
+		}
+		sc.Leader = sc.Members[0]
+		w.RegisterScene(sc)
+		cathedralSceneID = sc.ID
+		cathedralLeader = sc.Leader.ID
+	}
+	if cathedralSceneID == "" {
+		t.Fatal("cathedral place not found in seed/places")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runDone := make(chan struct{})
+	go func() { defer close(runDone); _ = w.Run(ctx) }()
+
+	wapi := w.API()
+
+	if err := wapi.Summon(ctx, "cathedral"); err != nil {
+		t.Fatalf("summon: %v", err)
+	}
+	if err := wapi.InjectEvent(ctx, cathedralSceneID, "", "the flagstones smell of incense"); err != nil {
+		t.Fatalf("inject: %v", err)
+	}
+
+	entries, err := wapi.Log(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("log: %v", err)
+	}
+
+	var sawSummon, sawSynth, sawSpeech bool
+	for _, e := range entries {
+		if e.SceneID == api.SceneID(g.ID) && e.Kind != string(store.KindSceneEnter) {
+			// Any event landing on the gang scene id from this test would
+			// indicate cross-scene leakage. The only allowed gang-id event
+			// is a scene_enter (which we don't emit) — strict zero events.
+			t.Errorf("gang scene saw unexpected event: %+v", e)
+		}
+		if e.SceneID != cathedralSceneID {
+			continue
+		}
+		switch store.Kind(e.Kind) {
+		case store.KindSummon:
+			sawSummon = true
+		case store.KindSynthesized:
+			sawSynth = true
+			if e.Actor != string(cathedralLeader) {
+				t.Errorf("synthesized actor: want %s, got %s", cathedralLeader, e.Actor)
+			}
+		case store.KindSpeech:
+			if _, ok := npcIDs[api.CharacterID(e.Actor)]; !ok {
+				t.Errorf("speech actor not an NPC: %s", e.Actor)
+			}
+			sawSpeech = true
+		}
+	}
+	if !sawSummon {
+		t.Error("no summon event on cathedral scene")
+	}
+	if !sawSpeech {
+		t.Error("no NPC speech on cathedral scene — orchestrate did not fan out")
+	}
+	if !sawSynth {
+		t.Error("no synthesized event on cathedral scene — leader did not synthesize")
+	}
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("world.Run did not return after cancel")
+	}
+}
