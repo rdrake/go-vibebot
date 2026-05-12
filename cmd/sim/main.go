@@ -41,7 +41,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	model, modelID, err := selectLLM(opts.LLMProvider, opts.GeminiModel)
+	model, modelID, err := selectLLM(opts.LLMProvider, opts.GeminiModel, opts.GeminiAPIKey)
 	if err != nil {
 		logger.Error("llm select", "err", err)
 		os.Exit(1)
@@ -59,7 +59,9 @@ func ircConfig(opts ircOptions, logger *slog.Logger) *irc.Config {
 	}
 	return &irc.Config{
 		Server: opts.Server, Port: opts.Port, TLS: opts.TLS,
-		Nick: opts.Nick, Channel: opts.Channel, Logger: logger,
+		Nick: opts.Nick, Channel: opts.Channel,
+		SASLUser: opts.SASLUser, SASLPass: opts.SASLPass,
+		Logger: logger,
 	}
 }
 

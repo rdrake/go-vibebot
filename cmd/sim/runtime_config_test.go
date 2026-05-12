@@ -103,6 +103,68 @@ irc:
 	}
 }
 
+func TestRuntimeOptionsLoadsSASLAndGeminiKey(t *testing.T) {
+	t.Setenv("VIBEBOT_SASL_PASSWORD", "")
+	t.Setenv("GEMINI_API_KEY", "")
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, defaultConfigFile)
+	if err := os.WriteFile(cfg, []byte(`
+gemini_api_key: cfg-key
+irc:
+  server: irc.example.net
+  nick: botnick
+  channel: "#bots"
+  sasl:
+    user: sasluser
+    pass: saslpass
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := parseRuntimeOptions(nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.GeminiAPIKey != "cfg-key" {
+		t.Errorf("GeminiAPIKey=%q", opts.GeminiAPIKey)
+	}
+	if opts.IRC.SASLUser != "sasluser" || opts.IRC.SASLPass != "saslpass" {
+		t.Errorf("SASL=%+v", opts.IRC)
+	}
+}
+
+func TestRuntimeOptionsEnvOverridesSecretsFromConfig(t *testing.T) {
+	t.Setenv("VIBEBOT_SASL_PASSWORD", "env-sasl-pass")
+	t.Setenv("GEMINI_API_KEY", "env-gemini-key")
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, defaultConfigFile)
+	if err := os.WriteFile(cfg, []byte(`
+gemini_api_key: cfg-key
+irc:
+  server: irc.example.net
+  nick: botnick
+  channel: "#bots"
+  sasl:
+    user: sasluser
+    pass: cfg-sasl-pass
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := parseRuntimeOptions(nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.GeminiAPIKey != "env-gemini-key" {
+		t.Errorf("env GEMINI_API_KEY should win, got %q", opts.GeminiAPIKey)
+	}
+	if opts.IRC.SASLPass != "env-sasl-pass" {
+		t.Errorf("env VIBEBOT_SASL_PASSWORD should win, got %q", opts.IRC.SASLPass)
+	}
+	// User stays from config — env override only applies to the password.
+	if opts.IRC.SASLUser != "sasluser" {
+		t.Errorf("SASLUser=%q", opts.IRC.SASLUser)
+	}
+}
+
 func TestRuntimeOptionsMissingDefaultConfigIsOK(t *testing.T) {
 	opts, err := parseRuntimeOptions(nil, t.TempDir())
 	if err != nil {

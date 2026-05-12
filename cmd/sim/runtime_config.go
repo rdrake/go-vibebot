@@ -15,52 +15,68 @@ import (
 const defaultConfigFile = "vibebot.yaml"
 
 type runtimeOptions struct {
-	ConfigPath  string
-	DBPath      string
-	SeedDir     string
-	Tick        time.Duration
-	LLMProvider string
-	GeminiModel string
-	IRC         ircOptions
+	ConfigPath   string
+	DBPath       string
+	SeedDir      string
+	Tick         time.Duration
+	LLMProvider  string
+	GeminiModel  string
+	GeminiAPIKey string
+	IRC          ircOptions
 }
 
 type ircOptions struct {
-	Server  string
-	Port    int
-	TLS     bool
-	Nick    string
-	Channel string
+	Server   string
+	Port     int
+	TLS      bool
+	Nick     string
+	Channel  string
+	SASLUser string
+	SASLPass string
 }
 
 type fileConfig struct {
-	DB          string        `yaml:"db"`
-	Seed        string        `yaml:"seed"`
-	Tick        string        `yaml:"tick"`
-	LLM         string        `yaml:"llm"`
-	GeminiModel string        `yaml:"gemini_model"`
-	IRC         fileIRCConfig `yaml:"irc"`
+	DB           string        `yaml:"db"`
+	Seed         string        `yaml:"seed"`
+	Tick         string        `yaml:"tick"`
+	LLM          string        `yaml:"llm"`
+	GeminiModel  string        `yaml:"gemini_model"`
+	GeminiAPIKey string        `yaml:"gemini_api_key"`
+	IRC          fileIRCConfig `yaml:"irc"`
 }
 
 type fileIRCConfig struct {
-	Server  string `yaml:"server"`
-	Port    int    `yaml:"port"`
-	TLS     *bool  `yaml:"tls"`
-	Nick    string `yaml:"nick"`
-	Channel string `yaml:"channel"`
+	Server  string           `yaml:"server"`
+	Port    int              `yaml:"port"`
+	TLS     *bool            `yaml:"tls"`
+	Nick    string           `yaml:"nick"`
+	Channel string           `yaml:"channel"`
+	SASL    *fileIRCSASLAuth `yaml:"sasl"`
+}
+
+// fileIRCSASLAuth holds the SASL PLAIN credentials. Putting a password in a
+// committed config file is a footgun; VIBEBOT_SASL_PASSWORD in the env wins
+// over Pass when both are set so secrets can live outside the repo.
+type fileIRCSASLAuth struct {
+	User string `yaml:"user"`
+	Pass string `yaml:"pass"`
 }
 
 type runtimeFlagValues struct {
-	configPath  *string
-	dbPath      *string
-	seedDir     *string
-	tick        *time.Duration
-	llmProvider *string
-	geminiModel *string
-	ircServer   *string
-	ircPort     *int
-	ircTLS      *bool
-	ircNick     *string
-	ircChannel  *string
+	configPath   *string
+	dbPath       *string
+	seedDir      *string
+	tick         *time.Duration
+	llmProvider  *string
+	geminiModel  *string
+	geminiAPIKey *string
+	ircServer    *string
+	ircPort      *int
+	ircTLS       *bool
+	ircNick      *string
+	ircChannel   *string
+	ircSASLUser  *string
+	ircSASLPass  *string
 }
 
 func defaultRuntimeOptions() runtimeOptions {
@@ -131,23 +147,43 @@ func parseRuntimeOptions(args []string, cwd string) (runtimeOptions, error) {
 	if explicit["irc-channel"] {
 		opts.IRC.Channel = *flags.ircChannel
 	}
+	if explicit["irc-sasl-user"] {
+		opts.IRC.SASLUser = *flags.ircSASLUser
+	}
+	if explicit["irc-sasl-pass"] {
+		opts.IRC.SASLPass = *flags.ircSASLPass
+	}
+	if explicit["gemini-api-key"] {
+		opts.GeminiAPIKey = *flags.geminiAPIKey
+	}
+
+	// Env overrides for secrets, so users can keep them out of the file/flags.
+	if v := os.Getenv("VIBEBOT_SASL_PASSWORD"); v != "" {
+		opts.IRC.SASLPass = v
+	}
+	if v := os.Getenv("GEMINI_API_KEY"); v != "" {
+		opts.GeminiAPIKey = v
+	}
 
 	return opts, nil
 }
 
 func bindRuntimeFlags(fs *flag.FlagSet, opts runtimeOptions) runtimeFlagValues {
 	return runtimeFlagValues{
-		configPath:  fs.String("config", "", "path to YAML runtime config"),
-		dbPath:      fs.String("db", opts.DBPath, "path to SQLite event store (':memory:' allowed)"),
-		seedDir:     fs.String("seed", opts.SeedDir, "directory containing characters.yaml and groups.yaml"),
-		tick:        fs.Duration("tick", opts.Tick, "world ticker interval"),
-		llmProvider: fs.String("llm", opts.LLMProvider, "LLM provider: echo|gemini"),
-		geminiModel: fs.String("gemini-model", opts.GeminiModel, "Gemini model id"),
-		ircServer:   fs.String("irc-server", opts.IRC.Server, "IRC server (omit to disable IRC)"),
-		ircPort:     fs.Int("irc-port", opts.IRC.Port, "IRC port"),
-		ircTLS:      fs.Bool("irc-tls", opts.IRC.TLS, "use TLS for IRC"),
-		ircNick:     fs.String("irc-nick", opts.IRC.Nick, "IRC nick"),
-		ircChannel:  fs.String("irc-channel", opts.IRC.Channel, "IRC channel"),
+		configPath:   fs.String("config", "", "path to YAML runtime config"),
+		dbPath:       fs.String("db", opts.DBPath, "path to SQLite event store (':memory:' allowed)"),
+		seedDir:      fs.String("seed", opts.SeedDir, "directory containing characters.yaml and groups.yaml"),
+		tick:         fs.Duration("tick", opts.Tick, "world ticker interval"),
+		llmProvider:  fs.String("llm", opts.LLMProvider, "LLM provider: echo|gemini"),
+		geminiModel:  fs.String("gemini-model", opts.GeminiModel, "Gemini model id"),
+		geminiAPIKey: fs.String("gemini-api-key", opts.GeminiAPIKey, "Gemini API key (env GEMINI_API_KEY overrides)"),
+		ircServer:    fs.String("irc-server", opts.IRC.Server, "IRC server (omit to disable IRC)"),
+		ircPort:      fs.Int("irc-port", opts.IRC.Port, "IRC port"),
+		ircTLS:       fs.Bool("irc-tls", opts.IRC.TLS, "use TLS for IRC"),
+		ircNick:      fs.String("irc-nick", opts.IRC.Nick, "IRC nick"),
+		ircChannel:   fs.String("irc-channel", opts.IRC.Channel, "IRC channel"),
+		ircSASLUser:  fs.String("irc-sasl-user", opts.IRC.SASLUser, "SASL PLAIN username (enables SASL when set)"),
+		ircSASLPass:  fs.String("irc-sasl-pass", opts.IRC.SASLPass, "SASL PLAIN password (env VIBEBOT_SASL_PASSWORD overrides)"),
 	}
 }
 
@@ -192,6 +228,9 @@ func applyConfigFile(opts *runtimeOptions, path string, explicit bool) error {
 	if cfg.GeminiModel != "" {
 		opts.GeminiModel = cfg.GeminiModel
 	}
+	if cfg.GeminiAPIKey != "" {
+		opts.GeminiAPIKey = cfg.GeminiAPIKey
+	}
 	if cfg.IRC.Server != "" {
 		opts.IRC.Server = cfg.IRC.Server
 	}
@@ -206,6 +245,14 @@ func applyConfigFile(opts *runtimeOptions, path string, explicit bool) error {
 	}
 	if cfg.IRC.Channel != "" {
 		opts.IRC.Channel = cfg.IRC.Channel
+	}
+	if cfg.IRC.SASL != nil {
+		if cfg.IRC.SASL.User != "" {
+			opts.IRC.SASLUser = cfg.IRC.SASL.User
+		}
+		if cfg.IRC.SASL.Pass != "" {
+			opts.IRC.SASLPass = cfg.IRC.SASL.Pass
+		}
 	}
 	return nil
 }

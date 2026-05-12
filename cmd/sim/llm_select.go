@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/afternet/go-vibebot/internal/llm"
 	"github.com/afternet/go-vibebot/internal/llm/gemini"
@@ -11,16 +10,18 @@ import (
 
 // selectLLM returns the llm.LLM implementation requested by --llm along with
 // its embedding model identifier (used to scope persisted vector rows).
-func selectLLM(provider, geminiModel string) (llm.LLM, string, error) {
+//
+// configKey is the API key resolved from runtimeOptions (config file or
+// --gemini-api-key flag, with GEMINI_API_KEY env already merged in).
+func selectLLM(provider, geminiModel, configKey string) (llm.LLM, string, error) {
 	switch provider {
 	case "echo":
 		return echoLLM{}, echoEmbeddingModelID, nil
 	case "gemini":
-		key := os.Getenv("GEMINI_API_KEY")
-		if key == "" {
-			return nil, "", errors.New("set GEMINI_API_KEY to use --llm=gemini")
+		if configKey == "" {
+			return nil, "", errors.New("gemini provider requires an API key (set GEMINI_API_KEY, --gemini-api-key, or gemini_api_key in config)")
 		}
-		g := gemini.New(key)
+		g := gemini.New(configKey)
 		if geminiModel != "" {
 			g.Model = geminiModel
 		}

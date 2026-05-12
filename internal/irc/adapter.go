@@ -31,13 +31,15 @@ const typingInterval = 2 * time.Second
 
 // Config configures the IRC connection.
 type Config struct {
-	Server  string
-	Port    int
-	TLS     bool
-	Nick    string
-	User    string
-	Channel string
-	Logger  *slog.Logger
+	Server   string
+	Port     int
+	TLS      bool
+	Nick     string
+	User     string
+	Channel  string
+	SASLUser string // when non-empty, authenticate via SASL PLAIN
+	SASLPass string
+	Logger   *slog.Logger
 }
 
 // Adapter wires a girc.Client to a WorldAPI.
@@ -73,7 +75,7 @@ func New(cfg Config, w api.WorldAPI) (*Adapter, error) {
 // message to capability-aware receivers). Otherwise the adapter falls
 // back to chunked PRIVMSGs.
 func (a *Adapter) Run(ctx context.Context) error {
-	client := girc.New(girc.Config{
+	gcfg := girc.Config{
 		Server: a.cfg.Server,
 		Port:   a.cfg.Port,
 		Nick:   a.cfg.Nick,
@@ -84,7 +86,11 @@ func (a *Adapter) Run(ctx context.Context) error {
 			capMultiline:   nil,
 			capMessageTags: nil,
 		},
-	})
+	}
+	if a.cfg.SASLUser != "" {
+		gcfg.SASL = &girc.SASLPlain{User: a.cfg.SASLUser, Pass: a.cfg.SASLPass}
+	}
+	client := girc.New(gcfg)
 
 	client.Handlers.Add(girc.CONNECTED, func(c *girc.Client, _ girc.Event) {
 		c.Cmd.Join(a.cfg.Channel)
