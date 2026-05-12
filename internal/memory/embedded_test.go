@@ -324,3 +324,111 @@ func TestEmbeddedHydrateReplacesOnSecondCall(t *testing.T) {
 	if err := mem.Hydrate(ctx, st); err != nil { t.Fatal(err) }
 	if len(mem.entries) != 4 { t.Fatalf("second hydrate: len = %d, want 4 (replace, not append)", len(mem.entries)) }
 }
+
+// vectorEmbedder returns a stable non-empty vector for every text. Used by
+// Record-persistence tests so the assertions exercise the persister path,
+// not the empty-embedding skip path.
+type vectorEmbedder struct{}
+
+func (vectorEmbedder) Complete(_ context.Context, _ llm.CompleteRequest) (string, error) {
+	return "", errors.New("complete not supported")
+}
+func (vectorEmbedder) EmbedText(_ context.Context, _ string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+// errEmbedder fails on EmbedText so callers see the embed-nil skip path.
+type errEmbedder struct{}
+
+func (errEmbedder) Complete(_ context.Context, _ llm.CompleteRequest) (string, error) {
+	return "", errors.New("complete not supported")
+}
+func (errEmbedder) EmbedText(_ context.Context, _ string) ([]float32, error) {
+	return nil, errors.New("embed fail")
+}
+
+// failingPersister always returns an error on Save and Load.
+type failingPersister struct{ called int }
+
+func (p *failingPersister) Save(_ context.Context, _ EmbeddingRow) error {
+	p.called++
+	return errors.New("save fail")
+}
+func (p *failingPersister) Load(_ context.Context, _ api.CharacterID, _ string, _ int) ([]EmbeddingRow, error) {
+	return nil, errors.New("load fail")
+}
+
+// countingPersister records Save invocations without failing.
+type countingPersister struct {
+	saved []EmbeddingRow
+}
+
+func (p *countingPersister) Save(_ context.Context, row EmbeddingRow) error {
+	p.saved = append(p.saved, row)
+	return nil
+}
+func (p *countingPersister) Load(_ context.Context, _ api.CharacterID, _ string, _ int) ([]EmbeddingRow, error) {
+	return nil, nil
+}
+
+func TestRecordSavesWhenPersisterConfigured(t *testing.T) {
+	cp := &countingPersister{}
+	mem := NewEmbedded(vectorEmbedder{}, 10, WithPersister(cp, api.CharacterID("alice"), "m"))
+	ev := store.NewInjectEvent("scene-1", "alice", "hi")
+	ev.ID = 42
+	if err := mem.Record(context.Background(), ev); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if len(cp.saved) != 1 {
+		t.Fatalf("Save called %d times, want 1", len(cp.saved))
+	}
+	if cp.saved[0].EventID != 42 {
+		t.Errorf("saved EventID = %d, want 42", cp.saved[0].EventID)
+	}
+	if len(cp.saved[0].Embedding) != 3 {
+		t.Errorf("saved Embedding len = %d, want 3", len(cp.saved[0].Embedding))
+	}
+}
+
+func TestRecordSaveFailureKeepsInMemoryEntry(t *testing.T) {
+	fp := &failingPersister{}
+	mem := NewEmbedded(vectorEmbedder{}, 10, WithPersister(fp, api.CharacterID("alice"), "m"))
+	ev := store.NewInjectEvent("scene-1", "alice", "hi")
+	ev.ID = 1
+	err := mem.Record(context.Background(), ev)
+	if err == nil {
+		t.Fatalf("expected error from failing Save")
+	}
+	if len(mem.entries) != 1 {
+		t.Errorf("entries len = %d, want 1 (in-memory append should stand)", len(mem.entries))
+	}
+}
+
+func TestRecordSkipsSaveWhenEmbeddingNil(t *testing.T) {
+	cp := &countingPersister{}
+	mem := NewEmbedded(errEmbedder{}, 10, WithPersister(cp, api.CharacterID("alice"), "m"))
+	ev := store.NewInjectEvent("scene-1", "alice", "hi")
+	ev.ID = 1
+	_ = mem.Record(context.Background(), ev) // returns embed error
+	if len(cp.saved) != 0 {
+		t.Fatalf("Save called %d times, want 0 (no embedding to save)", len(cp.saved))
+	}
+}
+
+func TestRecordSkipsSaveWhenEventIDZero(t *testing.T) {
+	cp := &countingPersister{}
+	// Use vectorEmbedder so the embedding is NON-empty — this isolates the
+	// zero-ID guard from the empty-embedding guard.
+	mem := NewEmbedded(vectorEmbedder{}, 10, WithPersister(cp, api.CharacterID("alice"), "m"))
+	ev := store.NewInjectEvent("scene-1", "alice", "hi")
+	// ev.ID stays 0
+	if err := mem.Record(context.Background(), ev); err != nil {
+		t.Fatalf("Record with zero ID: %v", err)
+	}
+	if len(cp.saved) != 0 {
+		t.Fatalf("Save called %d times, want 0 (zero ID = skip)", len(cp.saved))
+	}
+	if len(mem.entries) != 1 {
+		t.Errorf("in-memory append should still happen: len = %d", len(mem.entries))
+	}
+}

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -71,13 +72,18 @@ func (m *Embedded) SetRecencyParams(lambda float64, tau time.Duration) {
 	m.tau = tau
 }
 
-// Record embeds the event's text (if any) and appends it. Events with
-// empty text are still appended for recency-only retrieval; they never
-// compete on similarity.
+// Record embeds the event's text (if any), appends it in-memory, and, if a
+// persister is configured, also writes one row to the VectorStore.
 //
-// On embedding failure the event is still appended with a nil embedding
-// and the error is returned, letting the caller decide whether to log or
-// surface it. The store remains coherent either way.
+// Failure semantics:
+//   - Embedding failure: event appended with nil embedding; embed error
+//     returned. Save is NOT called (no vector to save).
+//   - Save failure: in-memory append stands; save error is joined with any
+//     embed error via errors.Join and returned. Record is one-shot — callers
+//     do not retry, since retrying would duplicate the in-memory entry and
+//     hit a PK conflict on the second Save.
+//   - ev.ID == 0 with persister configured: Save skipped, logged at debug.
+//     Caller is expected to have Appended the event before calling Record.
 func (m *Embedded) Record(ctx context.Context, ev store.Event) error {
 	entry := memoryEntry{event: ev, recorded: m.timestamp(ev)}
 	text := store.TextOf(ev)
@@ -96,7 +102,25 @@ func (m *Embedded) Record(ctx context.Context, ev store.Event) error {
 	if m.cap > 0 && len(m.entries) > m.cap {
 		m.entries = m.entries[len(m.entries)-m.cap:]
 	}
-	return embedErr
+
+	var saveErr error
+	if m.persister != nil && len(entry.embedding) > 0 {
+		if ev.ID == 0 {
+			slog.Default().Debug("memory: skipping Save for event with zero ID",
+				"character", m.owner)
+		} else {
+			if err := m.persister.Save(ctx, EmbeddingRow{
+				Owner: m.owner, ModelID: m.modelID, EventID: ev.ID,
+				Embedding: entry.embedding, Recorded: entry.recorded,
+			}); err != nil {
+				slog.Default().Warn("memory: persister Save failed",
+					"character", m.owner, "event_id", ev.ID, "err", err)
+				saveErr = fmt.Errorf("persist: %w", err)
+			}
+		}
+	}
+
+	return errors.Join(embedErr, saveErr)
 }
 
 // Retrieve returns up to k events ranked by similarity + recency. If
