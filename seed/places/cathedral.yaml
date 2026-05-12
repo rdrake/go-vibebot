@@ -1,0 +1,10 @@
+id: cathedral
+name: The Cathedral
+description: |
+  A cavernous, dusty cathedral. Light spears down through stained glass
+  onto the worn flagstones. A vicar polishes a candelabrum. A caretaker
+  mutters at a broom. A cat watches everything without comment.
+npcs:
+  - vicar
+  - caretaker
+  - cathedral-cat

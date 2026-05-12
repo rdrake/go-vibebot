@@ -1,0 +1,12 @@
+db: vibebot.db
+seed: seed
+tick: 30s
+llm: echo
+gemini_model: gemini-flash-lite-latest
+
+irc:
+  server: fractalrealities.afternet.org
+  port: 6697
+  tls: true
+  nick: vibebot
+  channel: "#cybercafe"

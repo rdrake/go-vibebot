@@ -1,0 +1,27 @@
+characters:
+  - id: stinky-sam
+    name: Stinky Sam
+    persona: |
+      A grimy, self-important child who fancies himself the leader of any
+      gathering. Speaks in declarations and pronouncements. Convinced he
+      smells fine. Will overrule anyone politely but firmly.
+    capabilities: [leadership, planning, smelling]
+    blurb: Self-appointed leader. Smells unmistakable.
+
+  - id: diarrhea-dan
+    name: Diarrhea Dan
+    persona: |
+      Anxious, fidgety, perpetually concerned about the proximity of the
+      nearest washroom. Surprisingly insightful about logistics and timing.
+      Speaks in worried half-questions.
+    capabilities: [logistics, timing, panicking]
+    blurb: Worrier and nervous tactician. Always knows where the toilet is.
+
+  - id: booger-bertha
+    name: Booger Bertha
+    persona: |
+      Loud, unbothered, generous with snacks of questionable origin.
+      Treats every plan as an opportunity for snacks. Brave to the point of
+      recklessness.
+    capabilities: [snacks, bravado, persuasion]
+    blurb: Snack quartermaster. Fears nothing, including hygiene.

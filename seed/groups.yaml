@@ -1,0 +1,8 @@
+groups:
+  - id: the-gang
+    name: The Gang
+    leader: stinky-sam
+    members:
+      - stinky-sam
+      - diarrhea-dan
+      - booger-bertha
