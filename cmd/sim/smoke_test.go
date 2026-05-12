@@ -147,7 +147,7 @@ func TestRunCtxAbortsBootOnHydrateFailure(t *testing.T) {
 	}
 
 	err := runCtx(ctx, logger, echoLLM{}, echoEmbeddingModelID,
-		dbPath, seedDir, 100*time.Millisecond, nil, failingFactory)
+		dbPath, seedDir, 100*time.Millisecond, nil, false, failingFactory)
 	if err == nil {
 		t.Fatal("expected runCtx to return an error from Hydrate")
 	}

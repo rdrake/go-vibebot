@@ -21,10 +21,12 @@ import (
 	"github.com/afternet/go-vibebot/internal/config"
 	"github.com/afternet/go-vibebot/internal/irc"
 	"github.com/afternet/go-vibebot/internal/llm"
+	mcpadapter "github.com/afternet/go-vibebot/internal/mcp"
 	"github.com/afternet/go-vibebot/internal/memory"
 	"github.com/afternet/go-vibebot/internal/scene"
 	"github.com/afternet/go-vibebot/internal/store"
 	"github.com/afternet/go-vibebot/internal/world"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func main() {
@@ -33,7 +35,7 @@ func main() {
 	opts, err := parseRuntimeOptions(os.Args[1:], ".")
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			printRuntimeUsage(os.Stdout)
+			printRuntimeUsage(os.Stderr)
 			return
 		}
 		flag.CommandLine.SetOutput(os.Stderr)
@@ -47,7 +49,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(logger, model, modelID, opts.DBPath, opts.SeedDir, opts.Tick, ircConfig(opts.IRC, logger)); err != nil {
+	if err := run(logger, model, modelID, opts.DBPath, opts.SeedDir, opts.Tick,
+		ircConfig(opts.IRC, logger), opts.MCPStdio); err != nil {
 		logger.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -79,17 +82,17 @@ func defaultVectorStore(st *store.SQLiteStore) memory.VectorStore {
 // calls runCtx. The bulk of the implementation lives in runCtx so tests can
 // supply their own context and seams.
 func run(logger *slog.Logger, llmImpl llm.LLM, modelID, dbPath, seedDir string,
-	tick time.Duration, ircCfg *irc.Config) error {
+	tick time.Duration, ircCfg *irc.Config, mcpStdio bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runCtx(ctx, logger, llmImpl, modelID, dbPath, seedDir, tick, ircCfg, defaultVectorStore)
+	return runCtx(ctx, logger, llmImpl, modelID, dbPath, seedDir, tick, ircCfg, mcpStdio, defaultVectorStore)
 }
 
 // runCtx is the testable core. It takes an external context and a vector
 // store factory so a test can drive it with a deadline and inject failures.
 func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 	modelID, dbPath, seedDir string, tick time.Duration, ircCfg *irc.Config,
-	vsFactory vectorStoreFactory) error {
+	mcpStdio bool, vsFactory vectorStoreFactory) error {
 
 	st, err := store.OpenSQLite(dbPath)
 	if err != nil {
@@ -192,8 +195,24 @@ func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 	worldErr := make(chan error, 1)
 	go func() { worldErr <- w.Run(ctx) }()
 
-	var ircErr chan error
-	if ircCfg != nil {
+	if mcpStdio && ircCfg != nil {
+		return fmt.Errorf("mcp-stdio and irc-server are mutually exclusive (stdio reserves stdout)")
+	}
+
+	var (
+		ircErr chan error
+		mcpErr chan error
+	)
+	switch {
+	case mcpStdio:
+		a, err := mcpadapter.New(mcpadapter.Config{Logger: logger}, worldAPI)
+		if err != nil {
+			return err
+		}
+		mcpErr = make(chan error, 1)
+		go func() { mcpErr <- a.Run(ctx, &mcpsdk.StdioTransport{}) }()
+		logger.Info("mcp adapter serving over stdio")
+	case ircCfg != nil:
 		a, err := irc.New(*ircCfg, worldAPI)
 		if err != nil {
 			return err
@@ -201,8 +220,8 @@ func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 		ircErr = make(chan error, 1)
 		go func() { ircErr <- a.Run(ctx) }()
 		logger.Info("irc adapter dialing", "server", ircCfg.Server)
-	} else {
-		logger.Info("irc adapter disabled (no -irc-server provided)")
+	default:
+		logger.Info("no edge adapter enabled (set -irc-server or -mcp-stdio)")
 	}
 
 	select {
@@ -211,10 +230,15 @@ func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 		if ircErr != nil {
 			<-ircErr
 		}
+		if mcpErr != nil {
+			<-mcpErr
+		}
 		return nil
 	case err := <-worldErr:
 		return err
 	case err := <-ircErr:
+		return err
+	case err := <-mcpErr:
 		return err
 	}
 }

@@ -177,3 +177,23 @@ func TestRuntimeOptionsMissingDefaultConfigIsOK(t *testing.T) {
 		t.Errorf("IRC.Server=%q", opts.IRC.Server)
 	}
 }
+
+func TestParseRuntimeOptions_MCPStdioFlag(t *testing.T) {
+	opts, err := parseRuntimeOptions([]string{"-mcp-stdio"}, t.TempDir())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !opts.MCPStdio {
+		t.Fatal("MCPStdio: got false, want true")
+	}
+}
+
+func TestParseRuntimeOptions_MCPStdioDefaultsFalse(t *testing.T) {
+	opts, err := parseRuntimeOptions(nil, t.TempDir())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if opts.MCPStdio {
+		t.Fatal("MCPStdio default: got true, want false")
+	}
+}

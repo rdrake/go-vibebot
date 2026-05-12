@@ -23,6 +23,7 @@ type runtimeOptions struct {
 	GeminiModel  string
 	GeminiAPIKey string
 	IRC          ircOptions
+	MCPStdio     bool
 }
 
 type ircOptions struct {
@@ -43,6 +44,7 @@ type fileConfig struct {
 	GeminiModel  string        `yaml:"gemini_model"`
 	GeminiAPIKey string        `yaml:"gemini_api_key"`
 	IRC          fileIRCConfig `yaml:"irc"`
+	MCP          fileMCPConfig `yaml:"mcp"`
 }
 
 type fileIRCConfig struct {
@@ -62,6 +64,10 @@ type fileIRCSASLAuth struct {
 	Pass string `yaml:"pass"`
 }
 
+type fileMCPConfig struct {
+	Stdio *bool `yaml:"stdio"`
+}
+
 type runtimeFlagValues struct {
 	configPath   *string
 	dbPath       *string
@@ -77,6 +83,7 @@ type runtimeFlagValues struct {
 	ircChannel   *string
 	ircSASLUser  *string
 	ircSASLPass  *string
+	mcpStdio     *bool
 }
 
 func defaultRuntimeOptions() runtimeOptions {
@@ -153,6 +160,9 @@ func parseRuntimeOptions(args []string, cwd string) (runtimeOptions, error) {
 	if explicit["irc-sasl-pass"] {
 		opts.IRC.SASLPass = *flags.ircSASLPass
 	}
+	if explicit["mcp-stdio"] {
+		opts.MCPStdio = *flags.mcpStdio
+	}
 	if explicit["gemini-api-key"] {
 		opts.GeminiAPIKey = *flags.geminiAPIKey
 	}
@@ -184,6 +194,7 @@ func bindRuntimeFlags(fs *flag.FlagSet, opts runtimeOptions) runtimeFlagValues {
 		ircChannel:   fs.String("irc-channel", opts.IRC.Channel, "IRC channel"),
 		ircSASLUser:  fs.String("irc-sasl-user", opts.IRC.SASLUser, "SASL PLAIN username (enables SASL when set)"),
 		ircSASLPass:  fs.String("irc-sasl-pass", opts.IRC.SASLPass, "SASL PLAIN password (env VIBEBOT_SASL_PASSWORD overrides)"),
+		mcpStdio:     fs.Bool("mcp-stdio", opts.MCPStdio, "run an MCP server over stdin/stdout instead of IRC"),
 	}
 }
 
@@ -253,6 +264,9 @@ func applyConfigFile(opts *runtimeOptions, path string, explicit bool) error {
 		if cfg.IRC.SASL.Pass != "" {
 			opts.IRC.SASLPass = cfg.IRC.SASL.Pass
 		}
+	}
+	if cfg.MCP.Stdio != nil {
+		opts.MCPStdio = *cfg.MCP.Stdio
 	}
 	return nil
 }
