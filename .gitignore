@@ -1,0 +1,8 @@
+# Build artifacts
+/go-vibebot
+
+# Runtime SQLite database
+/vibebot.db
+/vibebot.db-journal
+/vibebot.db-wal
+/vibebot.db-shm
