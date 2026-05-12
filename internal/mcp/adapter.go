@@ -95,4 +95,14 @@ func (a *Adapter) registerTools() {
 		a.logHandler,
 	)
 }
-func (a *Adapter) registerResources() {}
+func (a *Adapter) registerResources() {
+	a.server.AddResource(
+		&mcpsdk.Resource{
+			URI:         uriCharacters,
+			Name:        "characters",
+			Description: "All characters registered with the world.",
+			MIMEType:    mimeJSON,
+		},
+		a.charactersHandler,
+	)
+}
