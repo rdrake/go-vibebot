@@ -105,7 +105,11 @@ func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 	if err != nil {
 		return err
 	}
-	if err := config.Validate(chars, groups); err != nil {
+	places, err := config.LoadPlaces(filepath.Join(seedDir, "places"))
+	if err != nil {
+		return err
+	}
+	if err := config.Validate(chars, groups, places); err != nil {
 		return err
 	}
 	if len(groups) == 0 {

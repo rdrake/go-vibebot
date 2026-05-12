@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// Validate cross-checks character/group references and returns a joined
-// error listing every problem found. Run after Load*; flagging all issues
-// at parse-time beats a chain of one-at-a-time wiring failures.
-func Validate(chars []CharacterSpec, groups []GroupSpec) error {
+// Validate cross-checks character/group/place references and returns a
+// joined error listing every problem found. Run after Load*; flagging all
+// issues at parse-time beats a chain of one-at-a-time wiring failures.
+func Validate(chars []CharacterSpec, groups []GroupSpec, places []PlaceSpec) error {
 	known := make(map[string]struct{}, len(chars))
 	var problems []string
 
@@ -51,6 +51,24 @@ func Validate(chars []CharacterSpec, groups []GroupSpec) error {
 		}
 		if g.Leader != "" && !leaderInMembers {
 			problems = append(problems, fmt.Sprintf("group %q leader %q not in members", g.ID, g.Leader))
+		}
+	}
+
+	placeIDs := make(map[string]struct{}, len(places))
+	for _, p := range places {
+		if p.ID == "" {
+			problems = append(problems, "place with empty id")
+			continue
+		}
+		if _, dup := placeIDs[p.ID]; dup {
+			problems = append(problems, fmt.Sprintf("duplicate place id %q", p.ID))
+			continue
+		}
+		placeIDs[p.ID] = struct{}{}
+		for _, n := range p.NPCs {
+			if _, ok := known[n]; !ok {
+				problems = append(problems, fmt.Sprintf("place %q npc %q not in characters", p.ID, n))
+			}
 		}
 	}
 

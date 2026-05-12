@@ -39,7 +39,7 @@ func TestSmokeEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load groups: %v", err)
 	}
-	if verr := config.Validate(chars, groups); verr != nil {
+	if verr := config.Validate(chars, groups, nil); verr != nil {
 		t.Fatalf("validate: %v", verr)
 	}
 
