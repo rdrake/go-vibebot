@@ -32,6 +32,26 @@ func (a *Adapter) injectHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	return nil, InjectOutput{OK: true, Message: "injected."}, nil
 }
 
+type NudgeInput struct {
+	CharacterID string `json:"character_id" jsonschema:"the character id to nudge"`
+}
+
+type NudgeOutput struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+func (a *Adapter) nudgeHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, in NudgeInput) (*mcpsdk.CallToolResult, NudgeOutput, error) {
+	if in.CharacterID == "" {
+		return toolError("nudge: character_id is required"), NudgeOutput{}, nil
+	}
+	if err := a.api.Nudge(ctx, api.CharacterID(in.CharacterID)); err != nil {
+		return toolError(fmt.Sprintf("nudge failed: %s", err.Error())), NudgeOutput{}, nil
+	}
+	a.logger.Info("mcp nudge", "character", in.CharacterID)
+	return nil, NudgeOutput{OK: true, Message: "nudged."}, nil
+}
+
 // toolError builds a CallToolResult with IsError=true and the message
 // packed into a single TextContent block. Use for WorldAPI errors and
 // input validation — never for protocol-level breaks (return Go error).

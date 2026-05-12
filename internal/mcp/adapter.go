@@ -73,5 +73,12 @@ func (a *Adapter) registerTools() {
 		},
 		a.injectHandler,
 	)
+	mcpsdk.AddTool(a.server,
+		&mcpsdk.Tool{
+			Name:        "nudge",
+			Description: "Nudge a character so they take a turn now instead of on the next tick.",
+		},
+		a.nudgeHandler,
+	)
 }
 func (a *Adapter) registerResources() {}
