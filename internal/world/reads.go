@@ -2,6 +2,7 @@ package world
 
 import (
 	"context"
+	"sort"
 
 	"github.com/afternet/go-vibebot/internal/api"
 )
@@ -72,4 +73,80 @@ func (w *World) lookupWho(sceneID api.SceneID) []api.CharacterRef {
 		return nil
 	}
 	return snapshotOf(sc).Members
+}
+
+type charactersReq struct {
+	reply chan []api.CharacterRef
+}
+
+type placesReq struct {
+	reply chan []api.PlaceRef
+}
+
+// Characters lists every character registered with the world, marshalled
+// via the coordinator goroutine so concurrent scene mutation cannot tear
+// the result.
+func (w *World) Characters(ctx context.Context) ([]api.CharacterRef, error) {
+	rep := make(chan []api.CharacterRef, 1)
+	select {
+	case w.charactersReq <- charactersReq{reply: rep}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case r := <-rep:
+		return r, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// Places lists every place-bound scene, in registration order.
+func (w *World) Places(ctx context.Context) ([]api.PlaceRef, error) {
+	rep := make(chan []api.PlaceRef, 1)
+	select {
+	case w.placesReq <- placesReq{reply: rep}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case r := <-rep:
+		return r, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (w *World) lookupCharacters() []api.CharacterRef {
+	out := make([]api.CharacterRef, 0, len(w.characters))
+	for id, c := range w.characters {
+		out = append(out, api.CharacterRef{ID: id, Name: c.Name, Blurb: c.Blurb})
+	}
+	// Stable order — map iteration is not.
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+func (w *World) lookupPlaces() []api.PlaceRef {
+	out := make([]api.PlaceRef, 0)
+	for _, sid := range w.sceneOrder {
+		sc := w.scenes[sid]
+		if sc == nil || sc.PlaceID == "" {
+			continue
+		}
+		members := make([]api.CharacterRef, 0, len(sc.Members))
+		for _, m := range sc.Members {
+			members = append(members, api.CharacterRef{ID: m.ID, Name: m.Name, Blurb: m.Blurb})
+		}
+		ref := api.PlaceRef{
+			ID:      sc.PlaceID,
+			SceneID: sc.ID,
+			Members: members,
+		}
+		if sc.Leader != nil {
+			ref.Leader = sc.Leader.ID
+		}
+		out = append(out, ref)
+	}
+	return out
 }

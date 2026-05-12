@@ -71,6 +71,14 @@ func (a apiImpl) Who(ctx context.Context, sceneID api.SceneID) ([]api.CharacterR
 	return a.w.Who(ctx, sceneID)
 }
 
+func (a apiImpl) Characters(ctx context.Context) ([]api.CharacterRef, error) {
+	return a.w.Characters(ctx)
+}
+
+func (a apiImpl) Places(ctx context.Context) ([]api.PlaceRef, error) {
+	return a.w.Places(ctx)
+}
+
 func (a apiImpl) Log(ctx context.Context, since time.Duration) ([]api.LogEntry, error) {
 	if since <= 0 {
 		since = time.Hour

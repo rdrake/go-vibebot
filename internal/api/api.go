@@ -9,10 +9,24 @@ import (
 )
 
 // CharacterRef is a lightweight handle to a character for read APIs.
+// JSON tags are required because adapters serialize these refs directly
+// to LLM consumers that parse by lowercase key.
 type CharacterRef struct {
-	ID    CharacterID
-	Name  string
-	Blurb string
+	ID    CharacterID `json:"id"`
+	Name  string      `json:"name"`
+	Blurb string      `json:"blurb"`
+}
+
+// PlaceRef is a lightweight handle to a registered place, suitable for
+// listing in read APIs. SceneID is the synthetic id under which the place
+// runs (today: "place:<PlaceID>"); Leader is the first NPC in the place's
+// yaml; Members are all NPCs in the place's scene. JSON tags are required
+// for the same reason as CharacterRef.
+type PlaceRef struct {
+	ID      PlaceID        `json:"id"`
+	SceneID SceneID        `json:"scene_id"`
+	Leader  CharacterID    `json:"leader"`
+	Members []CharacterRef `json:"members"`
 }
 
 // SceneSnapshot is a point-in-time view of a scene, safe to hand to callers.
@@ -49,4 +63,6 @@ type WorldAPI interface {
 	Log(ctx context.Context, since time.Duration) ([]LogEntry, error)
 	Who(ctx context.Context, sceneID SceneID) ([]CharacterRef, error)
 	Describe(ctx context.Context, id string) (string, error)
+	Characters(ctx context.Context) ([]CharacterRef, error)
+	Places(ctx context.Context) ([]PlaceRef, error)
 }

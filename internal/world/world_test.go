@@ -460,6 +460,103 @@ func TestSummonUnknownPlaceErrors(t *testing.T) {
 	}
 }
 
+// newCharactersPlacesWorld builds a world with one regular scene and one
+// place-scene, characters carry blurbs so the assertions exercise real
+// data. Returned context is already long enough for the read query.
+func newCharactersPlacesWorld(t *testing.T) (*World, context.Context, context.CancelFunc) {
+	t.Helper()
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	mk := func(id api.CharacterID, name, blurb string) *character.Character {
+		return &character.Character{
+			ID:     id,
+			Name:   name,
+			Blurb:  blurb,
+			Memory: memory.NewInMem(10),
+			Inbox:  make(chan character.Perception, 4),
+		}
+	}
+
+	gangLeader := mk("stinky-sam", "Stinky Sam", "smells like a wet dog")
+	gang := &scene.Scene{
+		ID:      api.SceneID("the-gang"),
+		Members: []*character.Character{gangLeader, mk("booger-bertha", "Booger Bertha", "picks her nose")},
+		Leader:  gangLeader,
+	}
+
+	vicar := mk("vicar", "The Vicar", "worried about the draft")
+	cathedral := &scene.Scene{
+		ID:      api.SceneID("place:cathedral"),
+		PlaceID: api.PlaceID("cathedral"),
+		Members: []*character.Character{vicar, mk("caretaker", "The Caretaker", "mutters at a broom")},
+		Leader:  vicar,
+	}
+
+	w := New(Config{TickInterval: time.Hour}, st, &mockLLM{})
+	w.RegisterScene(gang)
+	w.RegisterScene(cathedral)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	go func() { _ = w.Run(ctx) }()
+	return w, ctx, cancel
+}
+
+func TestWorldCharactersReturnsSortedRefs(t *testing.T) {
+	w, ctx, cancel := newCharactersPlacesWorld(t)
+	defer cancel()
+
+	refs, err := w.Characters(ctx)
+	if err != nil {
+		t.Fatalf("Characters: %v", err)
+	}
+	if len(refs) != 4 {
+		t.Fatalf("Characters len: got %d, want 4", len(refs))
+	}
+	for i := 1; i < len(refs); i++ {
+		if refs[i-1].ID >= refs[i].ID {
+			t.Errorf("Characters not sorted: %q before %q", refs[i-1].ID, refs[i].ID)
+		}
+	}
+	for _, r := range refs {
+		if r.Name == "" {
+			t.Errorf("CharacterRef %q has empty Name", r.ID)
+		}
+		if r.Blurb == "" {
+			t.Errorf("CharacterRef %q has empty Blurb", r.ID)
+		}
+	}
+}
+
+func TestWorldPlacesOnlyIncludesPlaceScenes(t *testing.T) {
+	w, ctx, cancel := newCharactersPlacesWorld(t)
+	defer cancel()
+
+	places, err := w.Places(ctx)
+	if err != nil {
+		t.Fatalf("Places: %v", err)
+	}
+	if len(places) != 1 {
+		t.Fatalf("Places len: got %d, want 1 (the gang scene has no PlaceID)", len(places))
+	}
+	p := places[0]
+	if p.ID != api.PlaceID("cathedral") {
+		t.Errorf("place ID: got %q, want %q", p.ID, "cathedral")
+	}
+	if p.SceneID != api.SceneID("place:cathedral") {
+		t.Errorf("scene id: got %q, want %q", p.SceneID, "place:cathedral")
+	}
+	if p.Leader != api.CharacterID("vicar") {
+		t.Errorf("leader: got %q, want %q", p.Leader, "vicar")
+	}
+	if len(p.Members) != 2 {
+		t.Errorf("members len: got %d, want 2", len(p.Members))
+	}
+}
+
 func TestSummonKnownPlaceWritesSummonEventScopedToPlaceScene(t *testing.T) {
 	st, err := store.OpenSQLite(":memory:")
 	if err != nil {

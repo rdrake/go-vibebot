@@ -33,10 +33,12 @@ type World struct {
 	model  llm.LLM
 	logger *slog.Logger
 
-	commands     chan Command
-	groupActions chan GroupAction
-	whereReq     chan whereReq
-	whoReq       chan whoReq
+	commands      chan Command
+	groupActions  chan GroupAction
+	whereReq      chan whereReq
+	whoReq        chan whoReq
+	charactersReq chan charactersReq
+	placesReq     chan placesReq
 
 	// owned by coordinator goroutine after Run starts
 	scenes     map[api.SceneID]*scene.Scene
@@ -65,8 +67,10 @@ func New(cfg Config, st store.EventStore, model llm.LLM) *World {
 		logger:       cfg.Logger,
 		commands:     make(chan Command, 16),
 		groupActions: make(chan GroupAction, 16),
-		whereReq:     make(chan whereReq),
-		whoReq:       make(chan whoReq),
+		whereReq:      make(chan whereReq),
+		whoReq:        make(chan whoReq),
+		charactersReq: make(chan charactersReq),
+		placesReq:     make(chan placesReq),
 		scenes:       make(map[api.SceneID]*scene.Scene),
 		characters:   make(map[api.CharacterID]*character.Character),
 		charScene:    make(map[api.CharacterID]api.SceneID),
@@ -138,6 +142,10 @@ func (w *World) Run(ctx context.Context) error {
 			req.reply <- w.lookupWhere(req.charID)
 		case req := <-w.whoReq:
 			req.reply <- w.lookupWho(req.sceneID)
+		case req := <-w.charactersReq:
+			req.reply <- w.lookupCharacters()
+		case req := <-w.placesReq:
+			req.reply <- w.lookupPlaces()
 		}
 	}
 }
