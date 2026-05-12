@@ -153,8 +153,8 @@ func TestLookupByIDsReturnsEvents(t *testing.T) {
 	var ids []EventID
 	for i := 0; i < 3; i++ {
 		ev := NewInjectEvent("scene-1", "alice", "hello "+strconv.Itoa(i))
-		if err := st.Append(ctx, &ev); err != nil {
-			t.Fatalf("Append: %v", err)
+		if appendErr := st.Append(ctx, &ev); appendErr != nil {
+			t.Fatalf("Append: %v", appendErr)
 		}
 		ids = append(ids, ev.ID)
 	}

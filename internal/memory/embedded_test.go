@@ -75,10 +75,10 @@ func TestEmbedded_RecencyFallback_EmptyQuery(t *testing.T) {
 func TestEmbedded_SimilarityRanksRelevantFirst(t *testing.T) {
 	fake := &fakeEmbedder{
 		vectors: map[string][]float32{
-			"sandwich":      {1, 0, 0},
-			"oak tree":      {0, 1, 0},
-			"violin":        {0, 0, 1},
-			"food: a wrap":  {0.9, 0.1, 0}, // close to sandwich
+			"sandwich":     {1, 0, 0},
+			"oak tree":     {0, 1, 0},
+			"violin":       {0, 0, 1},
+			"food: a wrap": {0.9, 0.1, 0}, // close to sandwich
 		},
 		def: []float32{0.5, 0.5, 0.5},
 	}
@@ -104,7 +104,7 @@ func TestEmbedded_SimilarityRanksRelevantFirst(t *testing.T) {
 func TestEmbedded_RecencyBonusBeatsStaleSimilarity(t *testing.T) {
 	fake := &fakeEmbedder{
 		vectors: map[string][]float32{
-			"match":   {1, 0},
+			"match":     {1, 0},
 			"unrelated": {0, 1},
 		},
 		def: []float32{1, 0},
@@ -244,7 +244,9 @@ func ids(evs []store.Event) []store.EventID {
 
 func TestEmbeddedHydratePopulatesEntries(t *testing.T) {
 	st, err := store.OpenSQLite(":memory:")
-	if err != nil { t.Fatalf("OpenSQLite: %v", err) }
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
 	t.Cleanup(func() { _ = st.Close() })
 	vs := store.NewSQLiteVectorStore(st.DB())
 
@@ -256,16 +258,22 @@ func TestEmbeddedHydratePopulatesEntries(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ev := store.NewInjectEvent("scene-1", "alice", "hello")
 		ev.Timestamp = now.Add(time.Duration(i) * time.Second)
-		if err := st.Append(ctx, &ev); err != nil { t.Fatal(err) }
+		if err := st.Append(ctx, &ev); err != nil {
+			t.Fatal(err)
+		}
 		if err := vs.Save(ctx, store.SaveArgs{
 			Owner: owner, ModelID: model, EventID: ev.ID,
 			Embedding: []float32{float32(i), 0, 0},
 			Recorded:  ev.Timestamp,
-		}); err != nil { t.Fatal(err) }
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	mem := NewEmbedded(&fakeEmbedder{}, 10, WithPersister(NewSQLiteVectorStoreAdapter(vs), owner, model))
-	if err := mem.Hydrate(ctx, st); err != nil { t.Fatalf("Hydrate: %v", err) }
+	if err := mem.Hydrate(ctx, st); err != nil {
+		t.Fatalf("Hydrate: %v", err)
+	}
 
 	if got := len(mem.entries); got != 3 {
 		t.Fatalf("entries len = %d, want 3", got)
@@ -307,22 +315,34 @@ func TestEmbeddedHydrateReplacesOnSecondCall(t *testing.T) {
 	seed := func(n int) {
 		for i := 0; i < n; i++ {
 			ev := store.NewInjectEvent("scene-1", "alice", "msg")
-			if err := st.Append(ctx, &ev); err != nil { t.Fatal(err) }
+			if err := st.Append(ctx, &ev); err != nil {
+				t.Fatal(err)
+			}
 			if err := vs.Save(ctx, store.SaveArgs{
 				Owner: owner, ModelID: model, EventID: ev.ID,
 				Embedding: []float32{0}, Recorded: time.Now().UTC(),
-			}); err != nil { t.Fatal(err) }
+			}); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	seed(2)
 
 	mem := NewEmbedded(&fakeEmbedder{}, 10, WithPersister(NewSQLiteVectorStoreAdapter(vs), owner, model))
-	if err := mem.Hydrate(ctx, st); err != nil { t.Fatal(err) }
-	if len(mem.entries) != 2 { t.Fatalf("first hydrate: len = %d", len(mem.entries)) }
+	if err := mem.Hydrate(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if len(mem.entries) != 2 {
+		t.Fatalf("first hydrate: len = %d", len(mem.entries))
+	}
 
 	seed(2)
-	if err := mem.Hydrate(ctx, st); err != nil { t.Fatal(err) }
-	if len(mem.entries) != 4 { t.Fatalf("second hydrate: len = %d, want 4 (replace, not append)", len(mem.entries)) }
+	if err := mem.Hydrate(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if len(mem.entries) != 4 {
+		t.Fatalf("second hydrate: len = %d, want 4 (replace, not append)", len(mem.entries))
+	}
 }
 
 // vectorEmbedder returns a stable non-empty vector for every text. Used by

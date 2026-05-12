@@ -23,15 +23,15 @@ func TestSQLiteVectorStoreRoundTrip(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		ev := NewInjectEvent("scene-1", "alice", "msg")
-		if err := st.Append(ctx, &ev); err != nil {
-			t.Fatalf("Append: %v", err)
+		if appendErr := st.Append(ctx, &ev); appendErr != nil {
+			t.Fatalf("Append: %v", appendErr)
 		}
-		if err := vs.Save(ctx, SaveArgs{
+		if saveErr := vs.Save(ctx, SaveArgs{
 			Owner: owner, ModelID: "test:m1", EventID: ev.ID,
 			Embedding: []float32{float32(i), float32(i + 1), float32(i + 2)},
 			Recorded:  base.Add(time.Duration(i) * time.Second),
-		}); err != nil {
-			t.Fatalf("Save: %v", err)
+		}); saveErr != nil {
+			t.Fatalf("Save: %v", saveErr)
 		}
 	}
 
@@ -64,25 +64,25 @@ func TestSQLiteVectorStoreModelFilter(t *testing.T) {
 	owner := api.CharacterID("alice")
 
 	ev := NewInjectEvent("scene-1", "alice", "msg")
-	if err := st.Append(ctx, &ev); err != nil {
-		t.Fatal(err)
+	if appendErr := st.Append(ctx, &ev); appendErr != nil {
+		t.Fatal(appendErr)
 	}
 	now := time.Unix(1_700_000_000, 0).UTC()
 	for _, m := range []string{"A", "B"} {
-		if err := vs.Save(ctx, SaveArgs{
+		if saveErr := vs.Save(ctx, SaveArgs{
 			Owner: owner, ModelID: m, EventID: ev.ID,
 			Embedding: []float32{1, 2}, Recorded: now,
-		}); err != nil {
-			t.Fatalf("Save %s: %v", m, err)
+		}); saveErr != nil {
+			t.Fatalf("Save %s: %v", m, saveErr)
 		}
 	}
 	for _, want := range []string{"A", "B"} {
-		got, err := vs.Load(ctx, owner, want, 10)
-		if err != nil {
-			t.Fatalf("Load %s: %v", want, err)
+		loadGot, loadErr := vs.Load(ctx, owner, want, 10)
+		if loadErr != nil {
+			t.Fatalf("Load %s: %v", want, loadErr)
 		}
-		if len(got) != 1 || got[0].ModelID != want {
-			t.Errorf("Load %s = %+v", want, got)
+		if len(loadGot) != 1 || loadGot[0].ModelID != want {
+			t.Errorf("Load %s = %+v", want, loadGot)
 		}
 	}
 	got, err := vs.Load(ctx, owner, "C", 10)
@@ -108,14 +108,14 @@ func TestSQLiteVectorStoreDeterministicOrderOnTies(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		ev := NewInjectEvent("scene-1", "alice", "msg")
-		if err := st.Append(ctx, &ev); err != nil {
-			t.Fatal(err)
+		if appendErr := st.Append(ctx, &ev); appendErr != nil {
+			t.Fatal(appendErr)
 		}
-		if err := vs.Save(ctx, SaveArgs{
+		if saveErr := vs.Save(ctx, SaveArgs{
 			Owner: owner, ModelID: "m", EventID: ev.ID,
 			Embedding: []float32{0}, Recorded: now,
-		}); err != nil {
-			t.Fatal(err)
+		}); saveErr != nil {
+			t.Fatal(saveErr)
 		}
 	}
 	got, err := vs.Load(ctx, owner, "m", 10)
@@ -143,15 +143,15 @@ func TestSQLiteVectorStoreUnboundedLimit(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		ev := NewInjectEvent("scene-1", "alice", "msg")
-		if err := st.Append(ctx, &ev); err != nil {
-			t.Fatal(err)
+		if appendErr := st.Append(ctx, &ev); appendErr != nil {
+			t.Fatal(appendErr)
 		}
-		if err := vs.Save(ctx, SaveArgs{
+		if saveErr := vs.Save(ctx, SaveArgs{
 			Owner: owner, ModelID: "m", EventID: ev.ID,
 			Embedding: []float32{float32(i)},
 			Recorded:  time.Unix(1_700_000_000+int64(i), 0).UTC(),
-		}); err != nil {
-			t.Fatal(err)
+		}); saveErr != nil {
+			t.Fatal(saveErr)
 		}
 	}
 	got, err := vs.Load(ctx, owner, "m", 0) // limit <= 0 = unbounded
