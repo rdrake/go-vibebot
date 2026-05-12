@@ -3,8 +3,11 @@
 package scene
 
 import (
+	"context"
+
 	"github.com/afternet/go-vibebot/internal/api"
 	"github.com/afternet/go-vibebot/internal/character"
+	"github.com/afternet/go-vibebot/internal/store"
 )
 
 // Scene is the orchestration unit. Members are addressed via their Inbox
@@ -20,4 +23,18 @@ type Scene struct {
 	Members []*character.Character
 	Leader  *character.Character
 	Router  Router
+}
+
+// BroadcastForMemory hands ev to every member's inbox as a perception-only
+// (Reply=nil) so each character records the outcome without producing a new
+// utterance. Returns ctx.Err() if cancelled mid-fanout.
+func (s *Scene) BroadcastForMemory(ctx context.Context, ev store.Event) error {
+	for _, m := range s.Members {
+		select {
+		case m.Inbox <- character.Perception{Event: ev}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }

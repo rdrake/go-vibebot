@@ -183,7 +183,13 @@ func (w *World) dispatchInject(ctx context.Context, target, desc string) error {
 		return nil
 	}
 	synthEv := store.NewSynthesizedEvent(sc.ID, sc.Leader.ID, result.Synthesized)
-	return w.appendOnly(ctx, synthEv)
+	if err := w.appendOnly(ctx, synthEv); err != nil {
+		return err
+	}
+	// Memory for the round is the synthesized outcome, not each peer's
+	// utterance — characters should remember what the group did, not
+	// every line that was spoken.
+	return sc.BroadcastForMemory(ctx, synthEv)
 }
 
 func (w *World) dispatchSummon(ctx context.Context, placeID api.PlaceID) error {

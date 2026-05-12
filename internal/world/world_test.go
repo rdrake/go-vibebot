@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -286,6 +287,105 @@ func TestNudgeWritesEventForKnownCharacter(t *testing.T) {
 	}
 	if evs[0].Actor != "m1" {
 		t.Errorf("want actor=m1, got %q", evs[0].Actor)
+	}
+}
+
+// trackingMem wraps a memory store with a mutex (so the test goroutine can
+// read concurrently with the decide goroutine) and a one-shot signal that
+// fires the first time a synthesized event is recorded.
+type trackingMem struct {
+	mu     sync.Mutex
+	inner  *memory.InMem
+	gotSyn chan struct{}
+	once   sync.Once
+}
+
+func newTrackingMem(cap int) *trackingMem {
+	return &trackingMem{inner: memory.NewInMem(cap), gotSyn: make(chan struct{})}
+}
+
+func (t *trackingMem) Record(ctx context.Context, ev store.Event) error {
+	t.mu.Lock()
+	err := t.inner.Record(ctx, ev)
+	t.mu.Unlock()
+	if ev.Kind == store.KindSynthesized {
+		t.once.Do(func() { close(t.gotSyn) })
+	}
+	return err
+}
+
+func (t *trackingMem) Retrieve(ctx context.Context, q string, k int) ([]store.Event, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.inner.Retrieve(ctx, q, k)
+}
+
+func (t *trackingMem) Summary() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.inner.Summary()
+}
+
+// TestInjectBroadcastsSynthesizedToMemberMemory asserts every scene member
+// records the synthesized round outcome in memory — characters remember
+// what the group did, not each peer's utterance.
+func TestInjectBroadcastsSynthesizedToMemberMemory(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	mk := func(id api.CharacterID, name string) (*character.Character, *trackingMem) {
+		mem := newTrackingMem(50)
+		return &character.Character{
+			ID: id, Name: name, Persona: "test " + name,
+			Memory: mem,
+			Inbox:  make(chan character.Perception, 4),
+		}, mem
+	}
+	leader, _ := mk("leader", "Leader")
+	m1, mem1 := mk("m1", "Member One")
+	m2, mem2 := mk("m2", "Member Two")
+
+	sc := &scene.Scene{
+		ID:      "scene-1",
+		Members: []*character.Character{leader, m1, m2},
+		Leader:  leader,
+	}
+	w := New(Config{TickInterval: time.Hour}, st, &mockLLM{})
+	w.RegisterScene(sc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan struct{})
+	go func() { defer close(runDone); _ = w.Run(ctx) }()
+
+	if err := w.API().InjectEvent(ctx, "", "the cat knocks over the lamp"); err != nil {
+		t.Fatalf("inject: %v", err)
+	}
+
+	// Both non-leader members must record the synthesized round.
+	for name, mem := range map[string]*trackingMem{"m1": mem1, "m2": mem2} {
+		select {
+		case <-mem.gotSyn:
+		case <-time.After(1 * time.Second):
+			t.Errorf("member %s never recorded a synthesized event", name)
+		}
+		evs, _ := mem.Retrieve(ctx, "", 100)
+		for _, ev := range evs {
+			if ev.Kind == store.KindSpeech && ev.Actor != name {
+				t.Errorf("member %s recorded peer speech from %s (should be outcome-only)",
+					name, ev.Actor)
+			}
+		}
+	}
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("world.Run did not return after cancel")
 	}
 }
 
