@@ -33,3 +33,21 @@ func (a *Adapter) charactersHandler(ctx context.Context, _ *mcpsdk.ReadResourceR
 		}},
 	}, nil
 }
+
+func (a *Adapter) placesHandler(ctx context.Context, _ *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
+	refs, err := a.api.Places(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("places: %w", err)
+	}
+	body, err := json.Marshal(refs)
+	if err != nil {
+		return nil, fmt.Errorf("places: marshal: %w", err)
+	}
+	return &mcpsdk.ReadResourceResult{
+		Contents: []*mcpsdk.ResourceContents{{
+			URI:      uriPlaces,
+			MIMEType: mimeJSON,
+			Text:     string(body),
+		}},
+	}, nil
+}

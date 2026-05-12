@@ -105,4 +105,13 @@ func (a *Adapter) registerResources() {
 		},
 		a.charactersHandler,
 	)
+	a.server.AddResource(
+		&mcpsdk.Resource{
+			URI:         uriPlaces,
+			Name:        "places",
+			Description: "All places currently registered as scenes.",
+			MIMEType:    mimeJSON,
+		},
+		a.placesHandler,
+	)
 }
