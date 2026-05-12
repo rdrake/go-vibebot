@@ -61,3 +61,23 @@ func toolError(msg string) *mcpsdk.CallToolResult {
 		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: msg}},
 	}
 }
+
+type SummonInput struct {
+	PlaceID string `json:"place_id" jsonschema:"the place id to summon (must be loaded)"`
+}
+
+type SummonOutput struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+func (a *Adapter) summonHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, in SummonInput) (*mcpsdk.CallToolResult, SummonOutput, error) {
+	if in.PlaceID == "" {
+		return toolError("summon: place_id is required"), SummonOutput{}, nil
+	}
+	if err := a.api.Summon(ctx, api.PlaceID(in.PlaceID)); err != nil {
+		return toolError(fmt.Sprintf("summon failed: %s", err.Error())), SummonOutput{}, nil
+	}
+	a.logger.Info("mcp summon", "place", in.PlaceID)
+	return nil, SummonOutput{OK: true, Message: "summoned."}, nil
+}

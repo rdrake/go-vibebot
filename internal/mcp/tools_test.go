@@ -113,3 +113,39 @@ func TestNudgeHandlerRejectsEmptyCharacter(t *testing.T) {
 		t.Errorf("Nudge should not have been called: %+v", fw.NudgeCalls)
 	}
 }
+
+func TestSummonHandlerForwardsPlaceID(t *testing.T) {
+	fw := &fakeWorld{}
+	a, _ := New(Config{}, fw)
+	_, out, err := a.summonHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		SummonInput{PlaceID: "cathedral"},
+	)
+	if err != nil {
+		t.Fatalf("summon handler returned error: %v", err)
+	}
+	if !out.OK {
+		t.Error("SummonOutput.OK=false")
+	}
+	if len(fw.SummonCalls) != 1 || fw.SummonCalls[0].PlaceID != api.PlaceID("cathedral") {
+		t.Errorf("SummonCalls: %+v", fw.SummonCalls)
+	}
+}
+
+func TestSummonHandlerSurfacesUnknownPlaceAsToolError(t *testing.T) {
+	fw := &fakeWorld{SummonErr: errors.New(`summon: unknown place "void"`)}
+	a, _ := New(Config{}, fw)
+	result, _, err := a.summonHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		SummonInput{PlaceID: "void"},
+	)
+	if err != nil {
+		t.Fatalf("got protocol err %v; want tool err", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("unknown place must produce IsError result")
+	}
+	if !strings.Contains(contentText(result), "unknown place") {
+		t.Errorf("missing underlying error in content: %q", contentText(result))
+	}
+}

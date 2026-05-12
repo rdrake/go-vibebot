@@ -80,5 +80,12 @@ func (a *Adapter) registerTools() {
 		},
 		a.nudgeHandler,
 	)
+	mcpsdk.AddTool(a.server,
+		&mcpsdk.Tool{
+			Name:        "summon",
+			Description: "Open a place scene so its NPCs become reachable. Errors if the place is not loaded.",
+		},
+		a.summonHandler,
+	)
 }
 func (a *Adapter) registerResources() {}
