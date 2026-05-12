@@ -28,6 +28,14 @@ const DefaultModel = "gemini-flash-lite-latest"
 // DefaultEmbeddingModel is Google's current text-embedding model.
 const DefaultEmbeddingModel = "text-embedding-004"
 
+// EmbeddingModelID is the stable namespaced identifier persisted alongside
+// each embedding row. It is NOT the wire-level model string (that lives in
+// DefaultEmbeddingModel) — the "gemini:" prefix exists so multiple providers
+// can never collide on the same model name. Change this constant when the
+// underlying embedding model changes; existing rows with stale IDs will be
+// filtered out at hydrate time until the operator deletes them.
+const EmbeddingModelID = "gemini:text-embedding-004"
+
 // Provider implements llm.LLM by calling Gemini's REST endpoints.
 type Provider struct {
 	APIKey         string

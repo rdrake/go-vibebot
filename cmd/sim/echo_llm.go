@@ -9,6 +9,11 @@ import (
 	"github.com/afternet/go-vibebot/internal/llm"
 )
 
+// echoEmbeddingModelID identifies the (non-)embedding emitted by echoLLM.
+// Distinct from any real provider so test rows cannot be confused with
+// production rows during local development.
+const echoEmbeddingModelID = "echo:none"
+
 // echoLLM is a non-network LLM used only to make the walking skeleton
 // runnable without API credentials. It synthesizes plausible-sounding
 // text from the prompt so the pipeline can be observed end-to-end.
