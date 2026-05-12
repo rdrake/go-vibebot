@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -147,5 +148,81 @@ func TestSummonHandlerSurfacesUnknownPlaceAsToolError(t *testing.T) {
 	}
 	if !strings.Contains(contentText(result), "unknown place") {
 		t.Errorf("missing underlying error in content: %q", contentText(result))
+	}
+}
+
+func TestLogHandlerUsesDefaultSinceWhenEmpty(t *testing.T) {
+	fw := &fakeWorld{LogReturn: []api.LogEntry{}}
+	a, _ := New(Config{}, fw)
+	_, out, err := a.logHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		LogInput{},
+	)
+	if err != nil {
+		t.Fatalf("log handler returned error: %v", err)
+	}
+	if len(fw.LogCalls) != 1 {
+		t.Fatalf("expected 1 Log call, got %d", len(fw.LogCalls))
+	}
+	if fw.LogCalls[0].Since != time.Hour {
+		t.Errorf("default since: got %v, want 1h", fw.LogCalls[0].Since)
+	}
+	if out.Entries == nil {
+		t.Errorf("Entries must be non-nil even when empty")
+	}
+}
+
+func TestLogHandlerParsesSince(t *testing.T) {
+	fw := &fakeWorld{LogReturn: []api.LogEntry{}}
+	a, _ := New(Config{}, fw)
+	_, _, err := a.logHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		LogInput{Since: "30m"},
+	)
+	if err != nil {
+		t.Fatalf("log handler returned error: %v", err)
+	}
+	if fw.LogCalls[0].Since != 30*time.Minute {
+		t.Errorf("since: got %v, want 30m", fw.LogCalls[0].Since)
+	}
+}
+
+func TestLogHandlerRejectsBadSince(t *testing.T) {
+	fw := &fakeWorld{}
+	a, _ := New(Config{}, fw)
+	result, _, err := a.logHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		LogInput{Since: "thursday"},
+	)
+	if err != nil {
+		t.Fatalf("got protocol err %v; want tool err", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("bad since should produce IsError result")
+	}
+	if len(fw.LogCalls) != 0 {
+		t.Errorf("Log must not be called on bad since: %+v", fw.LogCalls)
+	}
+}
+
+func TestLogHandlerFiltersByScene(t *testing.T) {
+	t0 := time.Now()
+	fw := &fakeWorld{LogReturn: []api.LogEntry{
+		{Timestamp: t0, SceneID: api.SceneID("the-gang"), Actor: "world", Kind: "inject", Text: "a"},
+		{Timestamp: t0, SceneID: api.SceneID("place:cathedral"), Actor: "world", Kind: "inject", Text: "b"},
+	}}
+	a, _ := New(Config{}, fw)
+	_, out, err := a.logHandler(context.Background(),
+		&mcpsdk.CallToolRequest{},
+		LogInput{SceneID: "place:cathedral"},
+	)
+	if err != nil {
+		t.Fatalf("log handler error: %v", err)
+	}
+	if len(out.Entries) != 1 {
+		t.Fatalf("got %d entries, want 1 (scene-filtered)", len(out.Entries))
+	}
+	if out.Entries[0].Text != "b" {
+		t.Errorf("filtered entry text: got %q want %q", out.Entries[0].Text, "b")
 	}
 }

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,4 +81,59 @@ func (a *Adapter) summonHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	}
 	a.logger.Info("mcp summon", "place", in.PlaceID)
 	return nil, SummonOutput{OK: true, Message: "summoned."}, nil
+}
+
+type LogInput struct {
+	Since   string `json:"since,omitempty" jsonschema:"Go duration string (e.g. \"1h\", \"30m\"); default 1h"`
+	SceneID string `json:"scene_id,omitempty" jsonschema:"optional scene id filter; empty = all scenes"`
+}
+
+type LogOutput struct {
+	Since   string         `json:"since"`
+	Entries []LogEntryJSON `json:"entries"`
+}
+
+// LogEntryJSON mirrors api.LogEntry but emits an RFC3339 timestamp string,
+// because JSON consumers parse strings more reliably than time.Time tagged
+// values via the SDK's schema inference.
+type LogEntryJSON struct {
+	Timestamp string `json:"timestamp"`
+	SceneID   string `json:"scene_id"`
+	Actor     string `json:"actor"`
+	Kind      string `json:"kind"`
+	Text      string `json:"text"`
+}
+
+const defaultLogSince = time.Hour
+
+func (a *Adapter) logHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, in LogInput) (*mcpsdk.CallToolResult, LogOutput, error) {
+	dur := defaultLogSince
+	if in.Since != "" {
+		d, err := time.ParseDuration(in.Since)
+		if err != nil {
+			return toolError(fmt.Sprintf("log: invalid since %q: %s", in.Since, err.Error())), LogOutput{}, nil
+		}
+		dur = d
+	}
+	entries, err := a.api.Log(ctx, dur)
+	if err != nil {
+		return toolError(fmt.Sprintf("log failed: %s", err.Error())), LogOutput{}, nil
+	}
+	out := LogOutput{
+		Since:   dur.String(),
+		Entries: make([]LogEntryJSON, 0, len(entries)),
+	}
+	for _, e := range entries {
+		if in.SceneID != "" && string(e.SceneID) != in.SceneID {
+			continue
+		}
+		out.Entries = append(out.Entries, LogEntryJSON{
+			Timestamp: e.Timestamp.UTC().Format(time.RFC3339Nano),
+			SceneID:   string(e.SceneID),
+			Actor:     e.Actor,
+			Kind:      e.Kind,
+			Text:      e.Text,
+		})
+	}
+	return nil, out, nil
 }

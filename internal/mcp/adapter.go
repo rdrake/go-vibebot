@@ -87,5 +87,12 @@ func (a *Adapter) registerTools() {
 		},
 		a.summonHandler,
 	)
+	mcpsdk.AddTool(a.server,
+		&mcpsdk.Tool{
+			Name:        "log",
+			Description: "Read recent world events. since defaults to 1h; scene_id filters to one scene.",
+		},
+		a.logHandler,
+	)
 }
 func (a *Adapter) registerResources() {}
