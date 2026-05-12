@@ -40,6 +40,7 @@ type World struct {
 
 	// owned by coordinator goroutine after Run starts
 	scenes     map[api.SceneID]*scene.Scene
+	sceneOrder []api.SceneID
 	characters map[api.CharacterID]*character.Character
 	charScene  map[api.CharacterID]api.SceneID
 
@@ -78,7 +79,11 @@ func (w *World) RegisterScene(s *scene.Scene) {
 	if w.running.Load() {
 		panic("world: RegisterScene called after Run")
 	}
+	if _, dup := w.scenes[s.ID]; dup {
+		panic(fmt.Sprintf("world: duplicate scene id %q", s.ID))
+	}
 	w.scenes[s.ID] = s
+	w.sceneOrder = append(w.sceneOrder, s.ID)
 	for _, m := range s.Members {
 		w.characters[m.ID] = m
 		w.charScene[m.ID] = s.ID
@@ -244,11 +249,13 @@ func (w *World) appendOnly(ctx context.Context, ev store.Event) error {
 	return nil
 }
 
-// defaultScene returns the first registered scene. The skeleton supports
-// exactly one; multi-scene routing lands in a later pass.
+// defaultScene returns the first registered scene, deterministic across
+// runs (a bare map iteration would not be). The skeleton's single-scene
+// case is unaffected; multi-scene routing in callers should use explicit
+// scene IDs and treat the default as a back-compat fallback.
 func (w *World) defaultScene() *scene.Scene {
-	for _, s := range w.scenes {
-		return s
+	if len(w.sceneOrder) == 0 {
+		return nil
 	}
-	return nil
+	return w.scenes[w.sceneOrder[0]]
 }

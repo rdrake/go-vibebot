@@ -414,3 +414,33 @@ func TestInjectUnknownSceneIDErrors(t *testing.T) {
 		t.Fatalf("expected error to mention scene, got %v", err)
 	}
 }
+
+func TestDefaultSceneIsFirstRegistered(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	mk := func(id api.CharacterID) *character.Character {
+		return &character.Character{
+			ID: id, Name: string(id),
+			Memory: memory.NewInMem(10),
+			Inbox:  make(chan character.Perception, 1),
+		}
+	}
+	first := &scene.Scene{ID: "first", Leader: mk("la"), Members: []*character.Character{mk("la")}}
+	second := &scene.Scene{ID: "second", Leader: mk("lb"), Members: []*character.Character{mk("lb")}}
+
+	w := New(Config{TickInterval: time.Hour}, st, &mockLLM{})
+	w.RegisterScene(first)
+	w.RegisterScene(second)
+
+	// Call defaultScene 100 times; it must always return "first".
+	for i := 0; i < 100; i++ {
+		got := w.defaultScene()
+		if got == nil || got.ID != "first" {
+			t.Fatalf("iteration %d: want scene id 'first', got %v", i, got)
+		}
+	}
+}
