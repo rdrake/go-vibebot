@@ -233,12 +233,41 @@ func (a *Adapter) sendMultilineBatch(c *girc.Client, target string, parts []batc
 	}
 }
 
-func (a *Adapter) cmdInject(ctx context.Context, args string, reply func(string)) {
+// parseInjectArgs splits the !inject argument string into an optional scene
+// id and a description. Forms:
+//
+//	"<desc>"                → ("", "<desc>", true)
+//	"@<scene-id> <desc>"    → ("<scene-id>", "<desc>", true)
+//
+// Empty args, or @scene with no description, returns ok=false.
+func parseInjectArgs(args string) (api.SceneID, string, bool) {
+	args = strings.TrimSpace(args)
 	if args == "" {
-		reply("usage: !inject <description>")
+		return "", "", false
+	}
+	if !strings.HasPrefix(args, "@") {
+		return "", args, true
+	}
+	rest := strings.TrimPrefix(args, "@")
+	parts := strings.SplitN(rest, " ", 2)
+	if len(parts) < 2 {
+		return "", "", false
+	}
+	sceneID := strings.TrimSpace(parts[0])
+	desc := strings.TrimSpace(parts[1])
+	if sceneID == "" || desc == "" {
+		return "", "", false
+	}
+	return api.SceneID(sceneID), desc, true
+}
+
+func (a *Adapter) cmdInject(ctx context.Context, args string, reply func(string)) {
+	sceneID, desc, ok := parseInjectArgs(args)
+	if !ok {
+		reply("usage: !inject [@<scene-id>] <description>")
 		return
 	}
-	if err := a.api.InjectEvent(ctx, "", "", args); err != nil {
+	if err := a.api.InjectEvent(ctx, sceneID, "", desc); err != nil {
 		reply("inject failed: " + err.Error())
 		return
 	}
