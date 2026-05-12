@@ -15,7 +15,7 @@ The README still lists these as deferred. Reality as of this writing:
 | Capability-tag pre-filter + LLM router | **Already implemented** in `internal/scene/router.go`, `llm_router.go`, `prefilter.go`. The skeleton's `LLMRouter{PreFilterK: 0, MaxConsult: 0}` wiring is what makes it act like fan-out-to-all. See "Tune router defaults" below. |
 | Real LLM providers (OpenAI, Anthropic) | Gemini is in (`internal/llm/gemini`). Open. |
 | Memory retrieval with embeddings | **Done this session** (`internal/memory/embedded.go`). |
-| Place instantiation with NPCs | Open. See plan below. |
+| Place instantiation with NPCs | **Done 2026-05-12** (cathedral case). See L2 below for follow-ups. |
 | Rolling per-character summaries | Open. Small. See below. |
 | `!recap [character]` | Open. Small. See below. |
 | Tool-call adapter for LLM users | Open. See plan below. |
@@ -48,33 +48,27 @@ Deferred follow-ups (open):
 
 ---
 
-### L2. Place instantiation into Scenes (cathedral case)
+### ~~L2. Place instantiation into Scenes (cathedral case)~~ — SHIPPED 2026-05-12
 
-**Why now**: Places are seeded but inert. Wiring them into Scenes is the first time the Place layer earns its keep, and the cathedral case (vicar, caretaker, cat) is small enough to be a good shakedown.
+Plan at `docs/superpowers/plans/2026-05-12-place-instantiation.md`; spec at `docs/superpowers/specs/2026-05-12-place-instantiation-design.md`.
 
-**Current state**:
-- `internal/place/place.go` defines `Place{ID, Name, Description, NPCs []string}`. Pure data.
-- `seed/places/*.yaml` likely exists — `internal/config/` would load them (verify).
-- `scene.Scene` has `PlaceID api.PlaceID` already plumbed but unused.
-- `!summon <place-id>` exists in `internal/irc/adapter.go` as scaffold (`NewSummonEvent`); it doesn't actually instantiate anything yet.
+What shipped:
+- `config.LoadPlaces(dir)` walks `seed/places/*.yaml`.
+- `config.Validate` cross-checks place NPC ids against character set.
+- Three new orphan characters in `seed/characters.yaml` (vicar, caretaker, cathedral-cat).
+- `WorldAPI.InjectEvent` takes an explicit `sceneID` arg; empty resolves to the first-registered scene.
+- `World.sceneOrder` makes `defaultScene` deterministic.
+- `dispatchSummon` resolves `place:<placeID>` and errors on unknown places.
+- `cmd/sim/main.go` registers one scene per loaded place at boot; first NPC in the yaml is leader.
+- IRC `!inject @<scene-id> <desc>` syntax for targeted injects.
+- `cmd/sim/smoke_test.go::TestSummonCathedralInjectAndSpeak` covers the full path.
 
-**Design call**:
-- A Place's NPCs are character specs that get spun up only when the place is summoned into a scene. They share the same `character.Character` shape as group members.
-- On `!summon`, the world coordinator should: (a) look up the place, (b) instantiate any NPC characters not already running (Memory, Inbox, decide goroutine), (c) attach them to an appropriate Scene (or create a per-place transient Scene). Keeping the "per-place transient Scene" model preserves the "scenes are the orchestration unit" rule from the README.
-- NPC seeds live alongside characters; the difference is they're not in any group, only in a place's `NPCs []string`.
-
-**Plan**:
-1. Confirm `internal/config` can load places (likely already wired; verify and document).
-2. Add `world.SummonPlace(ctx, placeID)`: creates a transient scene from the place's NPCs if one isn't running, registers it, starts the goroutines.
-3. Wire `WorldAPI.Summon` (already exists per IRC adapter) to call into the new method.
-4. NPC `Memory`: use `Embedded` like normal characters. With L1 done, NPC memory also persists.
-5. Decide scene lifecycle: do place-scenes idle out after some period? Skeleton answer: keep them alive until shutdown. Mark idle-out as follow-up.
-
-**Files**: `internal/world/`, `internal/scene/`, `internal/config/`, `cmd/sim/main.go`, `seed/places/cathedral.yaml` (if missing).
-
-**Test strategy**: extend the existing smoke test — summon a place, inject an event scoped to it, confirm an NPC speaks. Tests live in `cmd/sim/`.
-
-**Open question to settle in the session**: do summoned NPCs receive events from *other* scenes (e.g., cathedral cat hears bar gossip)? Skeleton answer: no — events stay scoped to their scene. The "shared memory across scenes" idea is a much later phase.
+Deferred follow-ups (open):
+- **Runtime scene registration** — `World.RegisterScene` panics after `Run` starts. Lifting this requires coordinator-goroutine-owned scene creation so a place can be summoned without being pre-loaded.
+- **Scene idle-out for place-scenes** — place-scene NPC goroutines stay alive for the binary's lifetime. Add an idle timer.
+- **Multiple simultaneous instances of the same place** — one scene per `Place.ID` today; NPC memory rows are keyed by character id so two cathedrals over time share memory. Per-instance scoping needed when this lands.
+- **Ambient tick fan-out** — `handleTick` only emits to the default scene. Place-scenes never receive ambient ticks.
+- **Cross-scene perception** — explicitly out of scope; events stay isolated.
 
 ---
 
