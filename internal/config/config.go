@@ -4,8 +4,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -75,4 +80,34 @@ func readYAML(path string, v any) error {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 	return nil
+}
+
+// LoadPlaces reads every .yaml/.yml file in dir as a PlaceSpec and returns
+// them sorted by ID. A missing directory returns an empty slice (not an
+// error); other I/O failures are surfaced.
+func LoadPlaces(dir string) ([]PlaceSpec, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read places dir %s: %w", dir, err)
+	}
+	var places []PlaceSpec
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		p, err := LoadPlace(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		places = append(places, p)
+	}
+	sort.Slice(places, func(i, j int) bool { return places[i].ID < places[j].ID })
+	return places, nil
 }
