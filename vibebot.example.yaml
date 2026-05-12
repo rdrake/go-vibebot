@@ -1,0 +1,19 @@
+db: vibebot.db
+seed: seed
+tick: 30s
+llm: echo
+gemini_model: gemini-flash-lite-latest
+# Putting secrets in this file is convenient but risky if the repo is shared.
+# Either fill these in and keep the file un-committed, or leave them blank and
+# export GEMINI_API_KEY / VIBEBOT_SASL_PASSWORD in the environment instead.
+# gemini_api_key: ""
+
+irc:
+  server: fractalrealities.afternet.org
+  port: 6697
+  tls: true
+  nick: vibebot
+  channel: "#cybercafe"
+  # sasl:
+  #   user: vibebot
+  #   pass: ""

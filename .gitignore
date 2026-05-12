@@ -6,3 +6,6 @@
 /vibebot.db-journal
 /vibebot.db-wal
 /vibebot.db-shm
+
+# Runtime config (may hold secrets); commit vibebot.example.yaml instead.
+/vibebot.yaml
