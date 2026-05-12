@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/afternet/go-vibebot/internal/api"
 	"github.com/afternet/go-vibebot/internal/llm"
 	"github.com/afternet/go-vibebot/internal/store"
 )
@@ -239,4 +240,87 @@ func ids(evs []store.Event) []store.EventID {
 		out[i] = e.ID
 	}
 	return out
+}
+
+func TestEmbeddedHydratePopulatesEntries(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil { t.Fatalf("OpenSQLite: %v", err) }
+	t.Cleanup(func() { _ = st.Close() })
+	vs := store.NewSQLiteVectorStore(st.DB())
+
+	owner := api.CharacterID("alice")
+	model := "test:m"
+
+	ctx := context.Background()
+	now := time.Unix(1_700_000_000, 0).UTC()
+	for i := 0; i < 3; i++ {
+		ev := store.NewInjectEvent("scene-1", "alice", "hello")
+		ev.Timestamp = now.Add(time.Duration(i) * time.Second)
+		if err := st.Append(ctx, &ev); err != nil { t.Fatal(err) }
+		if err := vs.Save(ctx, store.SaveArgs{
+			Owner: owner, ModelID: model, EventID: ev.ID,
+			Embedding: []float32{float32(i), 0, 0},
+			Recorded:  ev.Timestamp,
+		}); err != nil { t.Fatal(err) }
+	}
+
+	mem := NewEmbedded(&fakeEmbedder{}, 10, WithPersister(NewSQLiteVectorStoreAdapter(vs), owner, model))
+	if err := mem.Hydrate(ctx, st); err != nil { t.Fatalf("Hydrate: %v", err) }
+
+	if got := len(mem.entries); got != 3 {
+		t.Fatalf("entries len = %d, want 3", got)
+	}
+	for i := 0; i < 3; i++ {
+		wantTs := now.Add(time.Duration(i) * time.Second)
+		if !mem.entries[i].recorded.Equal(wantTs) {
+			t.Errorf("[%d] recorded = %v, want %v", i, mem.entries[i].recorded, wantTs)
+		}
+		if !mem.entries[i].event.Timestamp.Equal(wantTs) {
+			t.Errorf("[%d] event.Timestamp = %v, want %v", i, mem.entries[i].event.Timestamp, wantTs)
+		}
+	}
+}
+
+func TestEmbeddedHydrateEmptyIsFreshDB(t *testing.T) {
+	st, _ := store.OpenSQLite(":memory:")
+	t.Cleanup(func() { _ = st.Close() })
+	vs := store.NewSQLiteVectorStore(st.DB())
+
+	mem := NewEmbedded(&fakeEmbedder{}, 10,
+		WithPersister(NewSQLiteVectorStoreAdapter(vs), api.CharacterID("alice"), "m"))
+	if err := mem.Hydrate(context.Background(), st); err != nil {
+		t.Fatalf("Hydrate empty: %v", err)
+	}
+	if len(mem.entries) != 0 {
+		t.Fatalf("entries len = %d, want 0", len(mem.entries))
+	}
+}
+
+func TestEmbeddedHydrateReplacesOnSecondCall(t *testing.T) {
+	st, _ := store.OpenSQLite(":memory:")
+	t.Cleanup(func() { _ = st.Close() })
+	vs := store.NewSQLiteVectorStore(st.DB())
+	owner := api.CharacterID("alice")
+	model := "m"
+	ctx := context.Background()
+
+	seed := func(n int) {
+		for i := 0; i < n; i++ {
+			ev := store.NewInjectEvent("scene-1", "alice", "msg")
+			if err := st.Append(ctx, &ev); err != nil { t.Fatal(err) }
+			if err := vs.Save(ctx, store.SaveArgs{
+				Owner: owner, ModelID: model, EventID: ev.ID,
+				Embedding: []float32{0}, Recorded: time.Now().UTC(),
+			}); err != nil { t.Fatal(err) }
+		}
+	}
+	seed(2)
+
+	mem := NewEmbedded(&fakeEmbedder{}, 10, WithPersister(NewSQLiteVectorStoreAdapter(vs), owner, model))
+	if err := mem.Hydrate(ctx, st); err != nil { t.Fatal(err) }
+	if len(mem.entries) != 2 { t.Fatalf("first hydrate: len = %d", len(mem.entries)) }
+
+	seed(2)
+	if err := mem.Hydrate(ctx, st); err != nil { t.Fatal(err) }
+	if len(mem.entries) != 4 { t.Fatalf("second hydrate: len = %d, want 4 (replace, not append)", len(mem.entries)) }
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/afternet/go-vibebot/internal/api"
 	"github.com/afternet/go-vibebot/internal/llm"
 	"github.com/afternet/go-vibebot/internal/store"
 )
@@ -34,6 +35,10 @@ type Embedded struct {
 	tau     time.Duration
 	now     func() time.Time // injectable for tests
 	entries []memoryEntry
+	// Persistence (optional; nil when WithPersister was not used).
+	persister VectorStore
+	owner     api.CharacterID
+	modelID   string
 }
 
 type memoryEntry struct {
@@ -43,16 +48,20 @@ type memoryEntry struct {
 }
 
 // NewEmbedded returns an Embedded store backed by the given LLM. cap <= 0
-// disables the size cap. lambda/tau take defaults; override via setters
-// before use if needed.
-func NewEmbedded(model llm.LLM, cap int) *Embedded {
-	return &Embedded{
+// disables the size cap. lambda/tau take defaults; override via SetRecencyParams.
+// Pass options like WithPersister to configure persistence.
+func NewEmbedded(model llm.LLM, cap int, opts ...Option) *Embedded {
+	m := &Embedded{
 		model:  model,
 		cap:    cap,
 		lambda: DefaultLambda,
 		tau:    DefaultTau,
 		now:    time.Now,
 	}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
 }
 
 // SetRecencyParams overrides the default lambda and tau. Use before any
@@ -178,6 +187,57 @@ func (m *Embedded) timestamp(ev store.Event) time.Time {
 		return ev.Timestamp
 	}
 	return m.now()
+}
+
+// Hydrate loads previously persisted embeddings for this character from the
+// configured VectorStore (if any), resolves event payloads via the given
+// EventLookup, and assigns them as the in-memory entries in oldest-first
+// order. A second call replaces entries wholesale — do not call after Record.
+//
+// Returns the first error from Load or LookupByIDs. An empty Load result is
+// treated as a fresh DB and yields nil.
+func (m *Embedded) Hydrate(ctx context.Context, events EventLookup) error {
+	if m.persister == nil {
+		return nil
+	}
+	rows, err := m.persister.Load(ctx, m.owner, m.modelID, m.cap)
+	if err != nil {
+		return fmt.Errorf("hydrate load: %w", err)
+	}
+	if len(rows) == 0 {
+		m.entries = nil
+		return nil
+	}
+	ids := make([]store.EventID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.EventID
+	}
+	evs, err := events.LookupByIDs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("hydrate lookup: %w", err)
+	}
+	byID := make(map[store.EventID]store.Event, len(evs))
+	for _, e := range evs {
+		byID[e.ID] = e
+	}
+
+	entries := make([]memoryEntry, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
+		ev, ok := byID[r.EventID]
+		if !ok {
+			slog.Default().Warn("hydrate: vector row references missing event",
+				"character", m.owner, "event_id", r.EventID)
+			continue
+		}
+		entries = append(entries, memoryEntry{
+			event:     ev,
+			embedding: r.Embedding,
+			recorded:  r.Recorded,
+		})
+	}
+	m.entries = entries
+	return nil
 }
 
 // cosine is the cosine similarity of two equal-length vectors. Returns 0
