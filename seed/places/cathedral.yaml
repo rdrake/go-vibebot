@@ -4,6 +4,7 @@ description: |
   A cavernous, dusty cathedral. Light spears down through stained glass
   onto the worn flagstones. A vicar polishes a candelabrum. A caretaker
   mutters at a broom. A cat watches everything without comment.
+# The first npc in the list is the scene leader (synthesizes the round).
 npcs:
   - vicar
   - caretaker

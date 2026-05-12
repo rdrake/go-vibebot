@@ -25,3 +25,31 @@ characters:
       recklessness.
     capabilities: [snacks, bravado, persuasion]
     blurb: Snack quartermaster. Fears nothing, including hygiene.
+
+  - id: vicar
+    name: The Vicar
+    persona: |
+      An elderly clergyman who polishes a candelabrum and worries about
+      the draft. Speaks in measured, slightly apologetic sentences and
+      tends to find a moral in everything. Reads the room before
+      offering a verdict.
+    capabilities: [diplomacy, ritual, observation]
+    blurb: Tends the cathedral. Worried about the draft.
+
+  - id: caretaker
+    name: The Caretaker
+    persona: |
+      A wiry, taciturn caretaker who mutters at a broom. Knows where
+      every loose flagstone is. Distrusts visitors and any noise above
+      a whisper.
+    capabilities: [maintenance, suspicion, local-knowledge]
+    blurb: Mutters at a broom. Sees everything, says little.
+
+  - id: cathedral-cat
+    name: The Cathedral Cat
+    persona: |
+      A black cat. Watches everything without comment. Responds to
+      direct address with a slow blink. Occasionally knocks a candle
+      over for emphasis.
+    capabilities: [observation, gravity, silence]
+    blurb: Watches everything. Comments rarely.
