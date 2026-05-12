@@ -41,13 +41,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	model, err := selectLLM(opts.LLMProvider, opts.GeminiModel)
+	model, modelID, err := selectLLM(opts.LLMProvider, opts.GeminiModel)
 	if err != nil {
 		logger.Error("llm select", "err", err)
 		os.Exit(1)
 	}
 
-	if err := run(logger, model, opts.DBPath, opts.SeedDir, opts.Tick, ircConfig(opts.IRC, logger)); err != nil {
+	if err := run(logger, model, modelID, opts.DBPath, opts.SeedDir, opts.Tick, ircConfig(opts.IRC, logger)); err != nil {
 		logger.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -63,9 +63,31 @@ func ircConfig(opts ircOptions, logger *slog.Logger) *irc.Config {
 	}
 }
 
-func run(logger *slog.Logger, llmImpl llm.LLM, dbPath, seedDir string, tick time.Duration, ircCfg *irc.Config) error {
+// vectorStoreFactory builds the memory.VectorStore used by run/runCtx.
+// Tests inject a failing factory to drive the hydrate-abort assertion.
+type vectorStoreFactory func(*store.SQLiteStore) memory.VectorStore
+
+// defaultVectorStore is the production wiring: a SQLite-backed VectorStore
+// sharing the SQLiteStore's *sql.DB.
+func defaultVectorStore(st *store.SQLiteStore) memory.VectorStore {
+	return memory.NewSQLiteVectorStoreAdapter(store.NewSQLiteVectorStore(st.DB()))
+}
+
+// run is the production entrypoint. It wires the signal-aware context and
+// calls runCtx. The bulk of the implementation lives in runCtx so tests can
+// supply their own context and seams.
+func run(logger *slog.Logger, llmImpl llm.LLM, modelID, dbPath, seedDir string,
+	tick time.Duration, ircCfg *irc.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	return runCtx(ctx, logger, llmImpl, modelID, dbPath, seedDir, tick, ircCfg, defaultVectorStore)
+}
+
+// runCtx is the testable core. It takes an external context and a vector
+// store factory so a test can drive it with a deadline and inject failures.
+func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
+	modelID, dbPath, seedDir string, tick time.Duration, ircCfg *irc.Config,
+	vsFactory vectorStoreFactory) error {
 
 	st, err := store.OpenSQLite(dbPath)
 	if err != nil {
@@ -88,20 +110,31 @@ func run(logger *slog.Logger, llmImpl llm.LLM, dbPath, seedDir string, tick time
 		return fmt.Errorf("no groups defined in %s", seedDir)
 	}
 
+	if vsFactory == nil {
+		vsFactory = defaultVectorStore
+	}
+	vs := vsFactory(st)
+
 	byID := make(map[api.CharacterID]*character.Character, len(chars))
 	for _, spec := range chars {
 		id := api.CharacterID(spec.ID)
+		mem := memory.NewEmbedded(llmImpl, 200,
+			memory.WithPersister(vs, id, modelID))
+		if err := mem.Hydrate(ctx, st); err != nil {
+			return fmt.Errorf("hydrate %s: %w", id, err)
+		}
 		byID[id] = &character.Character{
 			ID:           id,
 			Name:         spec.Name,
 			Persona:      spec.Persona,
 			Capabilities: spec.Capabilities,
 			Blurb:        spec.Blurb,
-			Memory:       memory.NewEmbedded(llmImpl, 200),
+			Memory:       mem,
 			Inbox:        make(chan character.Perception, 8),
 		}
 	}
 
+	// --- scene/group construction unchanged from the original run() ---
 	g := groups[0]
 	sc := &scene.Scene{
 		ID:     api.SceneID(g.ID),

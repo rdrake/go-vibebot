@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,4 +124,38 @@ func TestSmokeEndToEnd(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("world.Run did not return after cancel")
 	}
+}
+
+// failingVectorStore makes Hydrate fail so we can assert run aborts cleanly.
+type failingVectorStore struct{}
+
+func (failingVectorStore) Save(_ context.Context, _ memory.EmbeddingRow) error { return nil }
+func (failingVectorStore) Load(_ context.Context, _ api.CharacterID, _ string, _ int) ([]memory.EmbeddingRow, error) {
+	return nil, errors.New("simulated load failure")
+}
+
+func TestRunCtxAbortsBootOnHydrateFailure(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	dbPath := filepath.Join(t.TempDir(), "v.db")
+	seedDir := filepath.Join("..", "..", "seed")
+
+	failingFactory := func(_ *store.SQLiteStore) memory.VectorStore {
+		return failingVectorStore{}
+	}
+
+	err := runCtx(ctx, logger, echoLLM{}, echoEmbeddingModelID,
+		dbPath, seedDir, 100*time.Millisecond, nil, failingFactory)
+	if err == nil {
+		t.Fatal("expected runCtx to return an error from Hydrate")
+	}
+	if !strings.Contains(err.Error(), "hydrate") {
+		t.Errorf("error %q does not mention hydrate", err)
+	}
+}
+
+func TestRunCtxPersistsAndHydratesRoundTrip(t *testing.T) {
+	t.Skip("TODO: round-trip integration test (see plan Step 8.5)")
 }
