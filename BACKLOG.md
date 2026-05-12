@@ -18,7 +18,7 @@ The README still lists these as deferred. Reality as of this writing:
 | Place instantiation with NPCs | **Done 2026-05-12** (cathedral case). See L2 below for follow-ups. |
 | Rolling per-character summaries | Open. Small. See below. |
 | `!recap [character]` | Open. Small. See below. |
-| Tool-call adapter for LLM users | Open. See plan below. |
+| Tool-call adapter for LLM users | **Shipped 2026-05-12.** See L3 below. |
 | Multi-user auth / web UI / distributed ops / prod rate limiting | Out of scope for this milestone. |
 
 A doc pass on README to retire the stale entries is its own small task (see "Smaller items").
@@ -72,30 +72,23 @@ Deferred follow-ups (open):
 
 ---
 
-### L3. Tool-call adapter for LLM users
+### ~~L3. Tool-call adapter for LLM users~~ — SHIPPED 2026-05-12
 
-**Why now**: This is the second adapter that proves the architecture (IRC adapter was the first). It also unlocks running vibebot characters as MCP tools or as targets for other LLM systems, which is the design payoff promised by the README's "Adapter pattern at the edges."
+Plan at `docs/superpowers/plans/2026-05-12-mcp-adapter.md`; spec at `docs/superpowers/specs/2026-05-12-mcp-adapter-design.md`.
 
-**Current state**: `internal/api.WorldAPI` is the only surface adapters need. `internal/irc/adapter.go` is the reference adapter — translates IRC commands to WorldAPI calls and emits results back. Nothing wires up a tool-call surface yet.
+What shipped:
+- `internal/mcp` package: `Adapter`, `New(cfg, api.WorldAPI)`, `Run(ctx, mcpsdk.Transport)`.
+- Tools: `inject`, `nudge`, `summon`, `log` mapped 1:1 to WorldAPI verbs; world errors surface as `IsError` tool-level results.
+- Resources: `world://characters`, `world://places`, and the `world://log{?since,scene}` template (JSON, defaults `since=1h`).
+- `WorldAPI.Characters` / `WorldAPI.Places` added (plus `api.PlaceRef`); coordinator queries match the existing `whereReq` / `whoReq` shape.
+- `cmd/sim` flag `--mcp-stdio` runs the adapter over `mcp.StdioTransport{}`; mutually exclusive with `-irc-server`.
+- Test coverage: per-tool / per-resource unit tests with a fake WorldAPI; three end-to-end tests via `mcp.NewInMemoryTransports` (inject success, summon error → IsError, characters resource read).
 
-**Design call**:
-- Build as an MCP server (Model Context Protocol) so any LLM client speaking MCP can drive the world. Standard, mature, language-agnostic. Alternative would be a raw JSON-RPC or HTTP adapter — but MCP gives you Claude Desktop / Claude Code / Cursor / etc. for free.
-- Use Anthropic's Go MCP SDK if it exists by then; otherwise the JSON-RPC over stdio is simple to hand-roll.
-- Surface the same verbs as IRC: `inject`, `log`, `nudge`, `summon`. Plus probably a `recap` once L4 lands.
-- Resources (not just tools): expose `world://log?since=1h`, `world://characters`, `world://places` as MCP resources. Read-only.
-
-**Plan**:
-1. Choose MCP stdio vs HTTP+SSE transport. Start with stdio — simplest, works with Claude Desktop directly.
-2. New package `internal/mcp/adapter.go`: takes `api.WorldAPI`, registers tools that map 1:1 to WorldAPI calls.
-3. New `cmd/mcp-server/main.go` entrypoint that wires it up identical to `cmd/sim` but instead of (or alongside) IRC, runs the MCP server.
-4. Document in README.
-5. Test by adding the binary to Claude Desktop's MCP config and exercising verbs.
-
-**Files**: `internal/mcp/` (new), `cmd/mcp-server/` (new), README.
-
-**Test strategy**: protocol-level unit tests against the MCP message contract; manual e2e via a real MCP client.
-
-**Open question**: should the MCP adapter and IRC adapter run in the same binary? Probably yes — pass `--mcp-stdio` flag to enable. Saves boot duplication.
+Deferred follow-ups (open):
+- **HTTP+SSE transport.** Same `internal/mcp.Adapter` accepts a different `mcp.Transport`; needs a new flag and a server lifecycle wrapper. Out of this milestone.
+- **`recap` tool.** Waits for backlog S2 (`!recap [character]`) to land its WorldAPI surface; MCP will register the matching tool afterwards.
+- **MCP prompts.** Templated prompts a client can fetch. Not needed yet.
+- **Authentication.** Not needed for stdio (1:1 with spawning client). HTTP+SSE will need to revisit.
 
 ---
 

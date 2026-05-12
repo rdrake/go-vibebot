@@ -79,6 +79,12 @@ Design principles, in priority order:
    Current state is derivable. Free adventure logs, replay debugging.
 3. **Adapter pattern at the edges.** Core `WorldAPI` is the only surface
    adapters touch. IRC, tool calls, CLI: all are thin adapters.
+
+   The MCP adapter is the second edge. Run `go-vibebot --mcp-stdio --seed ./seed` and any
+   MCP-speaking client (Claude Desktop, Claude Code, Cursor) can issue `inject`,
+   `nudge`, `summon`, and `log` as tool calls, and read `world://characters`,
+   `world://places`, and `world://log` as resources. The MCP and IRC adapters are
+   mutually exclusive in a single process — stdio reserves stdout for JSON-RPC.
 4. **Scenes orchestrate, not groups.** Groups compose with Places into
    Scenes; the scene is the orchestration unit.
 5. **Selective perception, no belief modeling.** Memory tracks what was
@@ -136,7 +142,6 @@ later passes:
   retrieves the last *k*.
 - Rolling per-character summaries every N events.
 - `!recap [character]` in-character narration query.
-- Tool-call adapter mirroring the IRC adapter for LLM users.
 - Real LLM providers (OpenAI, Anthropic). The skeleton ships only an echo
   provider in `cmd/sim`; the `internal/llm` package is interface-only by
   design.
