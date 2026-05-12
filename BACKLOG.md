@@ -27,31 +27,24 @@ A doc pass on README to retire the stale entries is its own small task (see "Sma
 
 ## Larger items (with plans)
 
-### L1. Persist embeddings across restarts
+### ~~L1. Persist embeddings across restarts~~ — SHIPPED 2026-05-12
 
-**Why now**: `Embedded` is in-memory only. A restart loses all per-character memory, which forces the simulation to "start over" socially every time the binary cycles. With Gemini text-embedding-004 priced at fractions of a cent per call, paying once and re-using forever is the obvious win.
+Landed on `main` as commits `e1bedc2..2280a38` (+ lint cleanup `783cc5c`). Spec at `docs/superpowers/specs/2026-05-12-persistent-embeddings-design.md`, plan at `docs/superpowers/plans/2026-05-12-persistent-embeddings.md`.
 
-**Current state**: `memory.Embedded` holds `[]memoryEntry{event, embedding, recorded}` in process memory. The event itself is already persisted in SQLite via the world store; only the embedding and the per-character association are ephemeral.
+What shipped:
+- `character_memory` SQLite table with composite PK and descending index, schema-bootstrapped by `OpenSQLite`.
+- `internal/store/SQLiteVectorStore` (`Save` / `Load`) sharing the host `*sql.DB`.
+- Little-endian `float32` blob codec in `internal/store/vector_codec.go`.
+- `memory.VectorStore` / `EmbeddingRow` / `EventLookup` interfaces in `internal/memory/persister.go` plus `NewSQLiteVectorStoreAdapter` adapter.
+- `Embedded.Hydrate(ctx, EventLookup)` and `Record` save-on-write; `WithPersister(vs, owner, modelID)` option.
+- Per-provider `EmbeddingModelID` constants (`gemini:text-embedding-004`, `echo:none`); `selectLLM` returns the ID alongside the LLM.
+- `cmd/sim/main.go` split into `run` + `runCtx` so tests can drive the boot path; every character is `Hydrate`d before `w.Run` launches; Hydrate errors abort boot.
+- Test coverage: blob round-trip + NaN, `LookupByIDs`, vector store ordering / model filter / unbounded limit, Hydrate populates / empty-DB / replace-on-second-call, Record persist / save-failure / nil-embedding skip / zero-ID skip, `runCtx` aborts on Hydrate failure.
 
-**Design call**:
-- Sidecar SQLite table `character_memory`: `(character_id TEXT, event_id INTEGER, embedding BLOB, recorded_at INTEGER)`. Stored as raw `float32` little-endian (compact, no JSON overhead).
-- On `Record`: also insert into `character_memory`. Best-effort; failure to persist is logged but does not break the in-memory path.
-- On boot: load the most recent N rows per character (bounded by the `cap` in `NewEmbedded`) into the in-memory slice before `World.Run` starts dispatching.
-- Keep `InMem` purely in-memory; persistence is an `Embedded` concern.
-
-**Plan**:
-1. Add table + index in `internal/store/sqlite.go` schema bootstrap.
-2. Add store methods `RecordMemory(ctx, charID, eventID, vec, ts)` and `LoadMemory(ctx, charID, cap int)`.
-3. Extend `Embedded` constructor: `NewPersistentEmbedded(model llm.LLM, store MemoryPersister, charID api.CharacterID, cap int)`. Keep `NewEmbedded` for tests that don't want persistence.
-4. Boot path in `cmd/sim/main.go`: hydrate each character's memory from store after construction, before `World.Run`.
-5. Embedding format helpers: `vecToBlob([]float32) []byte`, `blobToVec([]byte) []float32`. Endian-fix in one place.
-6. Migrations: if the table doesn't exist, create it; no destructive migration needed since events are already persisted.
-
-**Files**: `internal/store/sqlite.go`, `internal/memory/embedded.go`, `internal/memory/persister.go` (new), `cmd/sim/main.go`, plus tests.
-
-**Test strategy**: round-trip blob encoding; smoke test that records 3 events, "restarts" by constructing a new `Embedded` with the same persister, and confirms retrieval still works.
-
-**Out of scope here**: model migration when changing embedding model dimensions. Document that swapping models requires a `DELETE FROM character_memory`.
+Deferred follow-ups (open):
+- **Round-trip integration test in `cmd/sim`** — currently stubbed: `TestRunCtxPersistsAndHydratesRoundTrip` in `cmd/sim/smoke_test.go` calls `t.Skip("TODO: round-trip integration test (see plan Step 8.5)")`. Unit-level coverage already proves Record persists and Hydrate loads; this would only confirm they meet through the `cmd/sim` wiring. Either fill it in (copy `TestSmokeEndToEnd`'s inlined-world setup, add `WithPersister`+`Hydrate`, inject one event, kill, reopen, assert `len(mem.entries) > 0`) or delete the stub.
+- **Model migration runbook in README** — one paragraph: "to retire an embedding model, run `DELETE FROM character_memory WHERE model_id = ?`. Stale rows are otherwise filtered at hydrate time but consume disk."
+- **Per-character `Hydrate` timeout** — `runCtx` currently blocks boot indefinitely on a stuck `VectorStore.Load`. Wrap each `mem.Hydrate(ctx, st)` call in a per-character timeout (e.g., 5s) so a slow backend fails one character rather than the whole boot.
 
 ---
 
