@@ -23,6 +23,18 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts_ns);
 CREATE INDEX IF NOT EXISTS idx_events_scene ON events(scene_id);
+
+CREATE TABLE IF NOT EXISTS character_memory (
+    character_id TEXT    NOT NULL,
+    event_id     INTEGER NOT NULL,
+    model_id     TEXT    NOT NULL,
+    dim          INTEGER NOT NULL,
+    embedding    BLOB    NOT NULL,
+    recorded_ns  INTEGER NOT NULL,
+    PRIMARY KEY (character_id, event_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_character_memory_owner_model_ts
+    ON character_memory(character_id, model_id, recorded_ns DESC, event_id DESC);
 `
 
 // SQLiteStore is an EventStore backed by SQLite (pure-Go driver, no cgo).
@@ -128,3 +140,57 @@ func (s *SQLiteStore) Query(ctx context.Context, f Filter) ([]Event, error) {
 
 // Close releases the underlying database.
 func (s *SQLiteStore) Close() error { return s.db.Close() }
+
+// DB returns the underlying *sql.DB so secondary stores (e.g. SQLiteVectorStore)
+// can share the same connection pool. Encapsulation break tolerated because
+// there is exactly one in-process consumer.
+func (s *SQLiteStore) DB() *sql.DB { return s.db }
+
+// LookupByIDs returns the events whose IDs are listed. Missing IDs are
+// silently omitted; the returned slice's length may be less than len(ids).
+// Order is ascending event ID for deterministic test assertions.
+func (s *SQLiteStore) LookupByIDs(ctx context.Context, ids []EventID) ([]Event, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]byte, 0, len(ids)*2)
+	args := make([]any, 0, len(ids))
+	for i, id := range ids {
+		if i > 0 {
+			placeholders = append(placeholders, ',')
+		}
+		placeholders = append(placeholders, '?')
+		args = append(args, int64(id))
+	}
+	q := `SELECT id, ts_ns, source, scene_id, actor, kind, payload
+	      FROM events WHERE id IN (` + string(placeholders) + `) ORDER BY id ASC`
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Event
+	for rows.Next() {
+		var (
+			id             int64
+			tsNs           int64
+			src, sid, kind string
+			actor          string
+			pload          []byte
+		)
+		if scanErr := rows.Scan(&id, &tsNs, &src, &sid, &actor, &kind, &pload); scanErr != nil {
+			return nil, scanErr
+		}
+		out = append(out, Event{
+			ID:        EventID(id),
+			Timestamp: time.Unix(0, tsNs).UTC(),
+			Source:    Source(src),
+			SceneID:   api.SceneID(sid),
+			Actor:     actor,
+			Kind:      Kind(kind),
+			Payload:   append([]byte(nil), pload...),
+		})
+	}
+	return out, rows.Err()
+}

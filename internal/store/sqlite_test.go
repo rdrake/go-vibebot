@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -137,5 +138,103 @@ func TestSQLiteFilterKind(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Kind != KindAmbient {
 		t.Errorf("want 1 ambient event, got %+v", got)
+	}
+}
+
+func TestLookupByIDsReturnsEvents(t *testing.T) {
+	t.Parallel()
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	ctx := context.Background()
+	var ids []EventID
+	for i := 0; i < 3; i++ {
+		ev := NewInjectEvent("scene-1", "alice", "hello "+strconv.Itoa(i))
+		if err := st.Append(ctx, &ev); err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+		ids = append(ids, ev.ID)
+	}
+
+	got, err := st.LookupByIDs(ctx, ids)
+	if err != nil {
+		t.Fatalf("LookupByIDs: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+	gotIDs := map[EventID]bool{}
+	for _, e := range got {
+		gotIDs[e.ID] = true
+	}
+	for _, id := range ids {
+		if !gotIDs[id] {
+			t.Errorf("missing event %d in result", id)
+		}
+	}
+}
+
+func TestLookupByIDsMissingOK(t *testing.T) {
+	t.Parallel()
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	got, err := st.LookupByIDs(context.Background(), []EventID{9999})
+	if err != nil {
+		t.Fatalf("LookupByIDs of missing id: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len = %d, want 0", len(got))
+	}
+}
+
+func TestLookupByIDsEmptyInput(t *testing.T) {
+	t.Parallel()
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	got, err := st.LookupByIDs(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("LookupByIDs(nil): %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len = %d, want 0", len(got))
+	}
+}
+
+func TestDBAccessorNonNil(t *testing.T) {
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if st.DB() == nil {
+		t.Fatal("DB() returned nil")
+	}
+}
+
+func TestCharacterMemoryTableExists(t *testing.T) {
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	row := st.DB().QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='character_memory'`)
+	var name string
+	if err := row.Scan(&name); err != nil {
+		t.Fatalf("character_memory table missing: %v", err)
+	}
+	if name != "character_memory" {
+		t.Fatalf("got %q, want character_memory", name)
 	}
 }
