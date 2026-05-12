@@ -11,9 +11,11 @@ type Command interface {
 	isCommand()
 }
 
-// Inject is an IRC `!inject` style scenario push.
-// Target is free-form (caller-provided noun, often "").
+// Inject is an IRC `!inject` style scenario push targeted at one scene.
+// SceneID may be empty: empty resolves to the default scene (the first
+// scene registered). Target is free-form (caller-provided noun, often "").
 type Inject struct {
+	SceneID     api.SceneID
 	Target      string
 	Description string
 	Reply       chan<- error

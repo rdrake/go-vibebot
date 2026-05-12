@@ -87,7 +87,7 @@ func TestSmokeEndToEnd(t *testing.T) {
 
 	api := w.API()
 
-	if injErr := api.InjectEvent(ctx, "", "Stinky Sam finds a suspicious sandwich"); injErr != nil {
+	if injErr := api.InjectEvent(ctx, "", "", "Stinky Sam finds a suspicious sandwich"); injErr != nil {
 		t.Fatalf("inject: %v", injErr)
 	}
 

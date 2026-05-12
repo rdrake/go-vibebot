@@ -238,7 +238,7 @@ func (a *Adapter) cmdInject(ctx context.Context, args string, reply func(string)
 		reply("usage: !inject <description>")
 		return
 	}
-	if err := a.api.InjectEvent(ctx, "", args); err != nil {
+	if err := a.api.InjectEvent(ctx, "", "", args); err != nil {
 		reply("inject failed: " + err.Error())
 		return
 	}

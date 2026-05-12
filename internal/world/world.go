@@ -140,7 +140,7 @@ func (w *World) Run(ctx context.Context) error {
 func (w *World) handleCommand(ctx context.Context, cmd Command) {
 	switch c := cmd.(type) {
 	case Inject:
-		c.Reply <- w.dispatchInject(ctx, c.Target, c.Description)
+		c.Reply <- w.dispatchInject(ctx, c.SceneID, c.Target, c.Description)
 	case Summon:
 		c.Reply <- w.dispatchSummon(ctx, c.PlaceID)
 	case Nudge:
@@ -152,10 +152,13 @@ func (w *World) handleCommand(ctx context.Context, cmd Command) {
 	}
 }
 
-func (w *World) dispatchInject(ctx context.Context, target, desc string) error {
-	sc := w.defaultScene()
+func (w *World) dispatchInject(ctx context.Context, sceneID api.SceneID, target, desc string) error {
+	sc := w.resolveScene(sceneID)
 	if sc == nil {
-		return errors.New("world: no scene registered")
+		if sceneID == "" {
+			return errors.New("world: no scene registered")
+		}
+		return fmt.Errorf("world: scene %q not found", sceneID)
 	}
 	ev := store.NewInjectEvent(sc.ID, target, desc)
 	ev.Timestamp = time.Now().UTC()
@@ -166,8 +169,6 @@ func (w *World) dispatchInject(ctx context.Context, target, desc string) error {
 	}
 
 	result, err := sc.Orchestrate(ctx, w.model, ev)
-	// Persist each member's utterance even if later synthesis fails, so the
-	// adventure log captures every voice in router-selected order.
 	for _, u := range result.Utterances {
 		speech := store.NewSpeechEvent(sc.ID, u.CharacterID, u.Text)
 		if appendErr := w.store.Append(ctx, &speech); appendErr != nil {
@@ -186,10 +187,17 @@ func (w *World) dispatchInject(ctx context.Context, target, desc string) error {
 	if err := w.appendOnly(ctx, synthEv); err != nil {
 		return err
 	}
-	// Memory for the round is the synthesized outcome, not each peer's
-	// utterance — characters should remember what the group did, not
-	// every line that was spoken.
 	return sc.BroadcastForMemory(ctx, synthEv)
+}
+
+// resolveScene returns the scene for the given id, or the default scene
+// when the id is empty. Returns nil when the id is non-empty and no scene
+// matches, or when no scenes are registered at all.
+func (w *World) resolveScene(sceneID api.SceneID) *scene.Scene {
+	if sceneID == "" {
+		return w.defaultScene()
+	}
+	return w.scenes[sceneID]
 }
 
 func (w *World) dispatchSummon(ctx context.Context, placeID api.PlaceID) error {

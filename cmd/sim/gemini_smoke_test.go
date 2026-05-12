@@ -93,7 +93,7 @@ func TestGeminiLiveSmoke(t *testing.T) {
 		_ = w.Run(ctx)
 	}()
 
-	if injErr := w.API().InjectEvent(ctx, "", "Stinky Sam finds a suspicious sandwich behind the cathedral."); injErr != nil {
+	if injErr := w.API().InjectEvent(ctx, "", "", "Stinky Sam finds a suspicious sandwich behind the cathedral."); injErr != nil {
 		t.Fatalf("inject: %v", injErr)
 	}
 

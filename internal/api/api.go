@@ -40,7 +40,7 @@ type LogEntry struct {
 // underlying data is immutable (e.g., the append-only event log).
 type WorldAPI interface {
 	// Writes — externally-driven scenarios and pokes.
-	InjectEvent(ctx context.Context, target, description string) error
+	InjectEvent(ctx context.Context, sceneID SceneID, target, description string) error
 	Summon(ctx context.Context, placeID PlaceID) error
 	Nudge(ctx context.Context, characterID CharacterID) error
 

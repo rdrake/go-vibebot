@@ -120,7 +120,7 @@ func TestInjectPersistsSpeechWhenSynthesisFails(t *testing.T) {
 	defer cancel()
 	go func() { _ = w.Run(ctx) }()
 
-	err = w.API().InjectEvent(ctx, "", "trigger synthesis failure")
+	err = w.API().InjectEvent(ctx, "", "", "trigger synthesis failure")
 	if err == nil || !strings.Contains(err.Error(), "synthesis failed") {
 		t.Fatalf("want synthesis error, got %v", err)
 	}
@@ -147,7 +147,7 @@ func TestInjectAppendsAndDispatches(t *testing.T) {
 
 	a := w.API()
 
-	if err := a.InjectEvent(ctx, "stinky-sam", "found a suspicious sandwich"); err != nil {
+	if err := a.InjectEvent(ctx, "", "stinky-sam", "found a suspicious sandwich"); err != nil {
 		t.Fatalf("inject: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestInjectAppendBeforeBroadcast(t *testing.T) {
 	go func() { _ = w.Run(ctx) }()
 
 	a := w.API()
-	if err := a.InjectEvent(ctx, "x", "should fail"); err == nil {
+	if err := a.InjectEvent(ctx, "", "x", "should fail"); err == nil {
 		t.Fatal("expected inject to fail with closed store")
 	}
 	if got := ll.calls.Load(); got != 0 {
@@ -361,7 +361,7 @@ func TestInjectBroadcastsSynthesizedToMemberMemory(t *testing.T) {
 	runDone := make(chan struct{})
 	go func() { defer close(runDone); _ = w.Run(ctx) }()
 
-	if err := w.API().InjectEvent(ctx, "", "the cat knocks over the lamp"); err != nil {
+	if err := w.API().InjectEvent(ctx, "", "", "the cat knocks over the lamp"); err != nil {
 		t.Fatalf("inject: %v", err)
 	}
 
@@ -397,5 +397,20 @@ func TestNudgeUnknownCharacterErrors(t *testing.T) {
 
 	if err := w.API().Nudge(ctx, "nope"); err == nil {
 		t.Fatal("expected error nudging unknown character")
+	}
+}
+
+func TestInjectUnknownSceneIDErrors(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = w.Run(ctx) }()
+
+	err := w.API().InjectEvent(ctx, "ghost-scene", "", "anything")
+	if err == nil {
+		t.Fatal("expected error for unknown scene id")
+	}
+	if !strings.Contains(err.Error(), "scene") {
+		t.Fatalf("expected error to mention scene, got %v", err)
 	}
 }

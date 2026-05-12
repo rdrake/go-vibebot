@@ -20,9 +20,9 @@ func (w *World) API() api.WorldAPI { return apiImpl{w: w} }
 
 type apiImpl struct{ w *World }
 
-func (a apiImpl) InjectEvent(ctx context.Context, target, description string) error {
+func (a apiImpl) InjectEvent(ctx context.Context, sceneID api.SceneID, target, description string) error {
 	return a.send(ctx, func(r chan<- error) Command {
-		return Inject{Target: target, Description: description, Reply: r}
+		return Inject{SceneID: sceneID, Target: target, Description: description, Reply: r}
 	})
 }
 
