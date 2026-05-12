@@ -114,4 +114,13 @@ func (a *Adapter) registerResources() {
 		},
 		a.placesHandler,
 	)
+	a.server.AddResourceTemplate(
+		&mcpsdk.ResourceTemplate{
+			URITemplate: uriLogTmpl,
+			Name:        "log",
+			Description: "Recent world events. Optional query params: since=<duration>, scene=<scene-id>.",
+			MIMEType:    mimeJSON,
+		},
+		a.logResourceHandler,
+	)
 }
