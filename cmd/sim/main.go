@@ -162,6 +162,31 @@ func runCtx(ctx context.Context, logger *slog.Logger, llmImpl llm.LLM,
 	w := world.New(world.Config{TickInterval: tick, Logger: logger}, st, llmImpl)
 	w.RegisterScene(sc)
 
+	for _, p := range places {
+		if len(p.NPCs) == 0 {
+			logger.Warn("place has no npcs; skipping", "place", p.ID)
+			continue
+		}
+		placeScene := &scene.Scene{
+			ID:      api.SceneID("place:" + p.ID),
+			PlaceID: api.PlaceID(p.ID),
+			Router:  scene.LLMRouter{Model: llmImpl, PreFilterK: 0, MaxConsult: 0},
+		}
+		for _, nid := range p.NPCs {
+			npc, ok := byID[api.CharacterID(nid)]
+			if !ok {
+				// Validate ran earlier; reaching here would be a code bug.
+				return fmt.Errorf("place %s references unknown character %s", p.ID, nid)
+			}
+			placeScene.Members = append(placeScene.Members, npc)
+		}
+		// First NPC in the yaml list is the leader.
+		placeScene.Leader = placeScene.Members[0]
+		w.RegisterScene(placeScene)
+		logger.Info("registered place scene",
+			"place", p.ID, "members", len(placeScene.Members), "leader", placeScene.Leader.ID)
+	}
+
 	worldAPI := w.API()
 
 	worldErr := make(chan error, 1)
