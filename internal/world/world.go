@@ -206,9 +206,10 @@ func (w *World) resolveScene(sceneID api.SceneID) *scene.Scene {
 }
 
 func (w *World) dispatchSummon(ctx context.Context, placeID api.PlaceID) error {
-	sc := w.defaultScene()
-	if sc == nil {
-		return errors.New("world: no scene registered")
+	sceneID := api.SceneID("place:" + string(placeID))
+	sc, ok := w.scenes[sceneID]
+	if !ok {
+		return fmt.Errorf("world: unknown place %q", placeID)
 	}
 	return w.appendOnly(ctx, store.NewSummonEvent(sc.ID, placeID))
 }

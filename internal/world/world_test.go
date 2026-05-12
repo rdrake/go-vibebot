@@ -444,3 +444,67 @@ func TestDefaultSceneIsFirstRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestSummonUnknownPlaceErrors(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = w.Run(ctx) }()
+
+	err := w.API().Summon(ctx, "nowhere")
+	if err == nil {
+		t.Fatal("expected error summoning unknown place")
+	}
+	if !strings.Contains(err.Error(), "unknown place") {
+		t.Fatalf("expected 'unknown place' in error, got %v", err)
+	}
+}
+
+func TestSummonKnownPlaceWritesSummonEventScopedToPlaceScene(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	mk := func(id api.CharacterID) *character.Character {
+		return &character.Character{
+			ID: id, Name: string(id),
+			Memory: memory.NewInMem(10),
+			Inbox:  make(chan character.Perception, 1),
+		}
+	}
+	gangLeader := mk("g-leader")
+	gang := &scene.Scene{ID: "gang", Leader: gangLeader, Members: []*character.Character{gangLeader}}
+
+	npc := mk("npc")
+	cathedral := &scene.Scene{
+		ID:      "place:cathedral",
+		PlaceID: "cathedral",
+		Leader:  npc,
+		Members: []*character.Character{npc},
+	}
+
+	w := New(Config{TickInterval: time.Hour}, st, &mockLLM{})
+	w.RegisterScene(gang)
+	w.RegisterScene(cathedral)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = w.Run(ctx) }()
+
+	if err := w.API().Summon(ctx, "cathedral"); err != nil {
+		t.Fatalf("summon: %v", err)
+	}
+
+	evs, err := st.Query(ctx, store.Filter{Kind: store.KindSummon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 1 {
+		t.Fatalf("want 1 summon event, got %d", len(evs))
+	}
+	if evs[0].SceneID != "place:cathedral" {
+		t.Fatalf("want summon scoped to place:cathedral, got %q", evs[0].SceneID)
+	}
+}
