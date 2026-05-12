@@ -155,7 +155,9 @@ func printRuntimeUsage(w io.Writer) {
 	fs := flag.NewFlagSet("sim", flag.ContinueOnError)
 	fs.SetOutput(w)
 	bindRuntimeFlags(fs, defaultRuntimeOptions())
-	fmt.Fprintln(w, "Usage of sim:")
+	if _, err := fmt.Fprintln(w, "Usage of sim:"); err != nil {
+		return
+	}
 	fs.PrintDefaults()
 }
 
