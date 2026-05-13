@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -59,6 +61,36 @@ func TestSQLiteMemoryStoreUsesSingleConnection(t *testing.T) {
 	if got := st.db.Stats().MaxOpenConnections; got != 1 {
 		t.Fatalf("want :memory: store pinned to 1 connection, got %d", got)
 	}
+}
+
+func TestSQLiteFilePathWithQuestionMarkOpensIntendedFile(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "events?scene.db")
+	st, err := OpenSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	ev := NewInjectEvent("scene-1", "alice", "hello")
+	if err := st.Append(context.Background(), &ev); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("expected database at literal path %q: %v", dbPath, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(dbPath), "events")); err == nil {
+		t.Fatalf("database was created at truncated path")
+	}
+}
+
+func TestSQLiteRelativeFilePathOpens(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	st, err := OpenSQLite("vibebot.db")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
 }
 
 func TestSQLiteFilterSince(t *testing.T) {

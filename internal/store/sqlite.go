@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
@@ -44,7 +46,8 @@ type SQLiteStore struct {
 
 // OpenSQLite opens or creates an event store at path. Use ":memory:" for tests.
 func OpenSQLite(path string) (*SQLiteStore, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := sqliteDSN(path)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -56,6 +59,32 @@ func OpenSQLite(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return &SQLiteStore{db: db}, nil
+}
+
+func sqliteDSN(path string) string {
+	if path == ":memory:" {
+		return path
+	}
+	if parsed, err := url.Parse(path); err == nil && parsed.Scheme == "file" {
+		return sqliteDSNWithPragmas(*parsed)
+	}
+	u := url.URL{Scheme: "file", Opaque: path}
+	if filepath.IsAbs(path) {
+		u.Opaque = ""
+		u.Path = path
+	}
+	return sqliteDSNWithPragmas(u)
+}
+
+func sqliteDSNWithPragmas(u url.URL) string {
+	q := u.Query()
+	// WAL lets readers run concurrently with a single writer; busy_timeout
+	// makes writers wait for the lock instead of returning SQLITE_BUSY
+	// when characters in the same scene race to persist embeddings.
+	q.Add("_pragma", "journal_mode(WAL)")
+	q.Add("_pragma", "busy_timeout(5000)")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // Append persists ev and assigns ev.ID on success.
