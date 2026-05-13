@@ -51,7 +51,7 @@ func NewAmbientEvent(scene api.SceneID, text string) Event {
 	return Event{
 		Source:  SourceTick,
 		SceneID: scene,
-		Actor:   "world",
+		Actor:   ActorWorld,
 		Kind:    KindAmbient,
 		Payload: encodeText(text, ""),
 	}

@@ -38,6 +38,11 @@ const (
 	KindNudge       Kind = "nudge"
 )
 
+// Actors are the well-known non-character values stored in Event.Actor.
+const (
+	ActorWorld = "world"
+)
+
 // Event is the append-only unit of world history.
 //
 // Payload is opaque JSON. Use the typed New*Event constructors and the
