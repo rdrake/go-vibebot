@@ -113,11 +113,16 @@ go run ./cmd/sim \
     --tick 30s \
     --irc-server irc.example.net --irc-port 6667 \
     --irc-nick vibebot --irc-channel '#vibebot'
+
+# Run with xAI/Grok for generation:
+XAI_API_KEY=... go run ./cmd/sim \
+    --llm xai --xai-model grok-4-1-fast-reasoning
 ```
 
 The binary auto-loads `vibebot.yaml` from the working directory when that
 file exists. Flags override config-file values, so one-off runs can change
-only the needed setting.
+only the needed setting. `--llm xai` uses xAI for character generation; if a
+Gemini key is also configured, Gemini is still used for memory embeddings.
 
 IRC commands once joined:
 

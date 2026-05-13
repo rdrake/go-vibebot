@@ -117,7 +117,7 @@ func TestCompleteEmptyCandidates(t *testing.T) {
 
 func TestEmbedTextWireShape(t *testing.T) {
 	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		wantPath := "/v1beta/models/text-embedding-004:embedContent"
+		wantPath := "/v1beta/models/gemini-embedding-001:embedContent"
 		if r.URL.Path != wantPath {
 			t.Errorf("path=%s want %s", r.URL.Path, wantPath)
 		}

@@ -22,6 +22,8 @@ type runtimeOptions struct {
 	LLMProvider  string
 	GeminiModel  string
 	GeminiAPIKey string
+	XAIModel     string
+	XAIAPIKey    string
 	IRC          ircOptions
 	MCPStdio     bool
 }
@@ -43,6 +45,8 @@ type fileConfig struct {
 	LLM          string        `yaml:"llm"`
 	GeminiModel  string        `yaml:"gemini_model"`
 	GeminiAPIKey string        `yaml:"gemini_api_key"`
+	XAIModel     string        `yaml:"xai_model"`
+	XAIAPIKey    string        `yaml:"xai_api_key"`
 	IRC          fileIRCConfig `yaml:"irc"`
 	MCP          fileMCPConfig `yaml:"mcp"`
 }
@@ -76,6 +80,8 @@ type runtimeFlagValues struct {
 	llmProvider  *string
 	geminiModel  *string
 	geminiAPIKey *string
+	xaiModel     *string
+	xaiAPIKey    *string
 	ircServer    *string
 	ircPort      *int
 	ircTLS       *bool
@@ -93,6 +99,7 @@ func defaultRuntimeOptions() runtimeOptions {
 		Tick:        2 * time.Minute,
 		LLMProvider: "echo",
 		GeminiModel: "gemini-flash-lite-latest",
+		XAIModel:    "grok-4-1-fast-reasoning",
 		IRC: ircOptions{
 			Port:    6667,
 			Nick:    "vibebot",
@@ -166,6 +173,12 @@ func parseRuntimeOptions(args []string, cwd string) (runtimeOptions, error) {
 	if explicit["gemini-api-key"] {
 		opts.GeminiAPIKey = *flags.geminiAPIKey
 	}
+	if explicit["xai-model"] {
+		opts.XAIModel = *flags.xaiModel
+	}
+	if explicit["xai-api-key"] {
+		opts.XAIAPIKey = *flags.xaiAPIKey
+	}
 
 	// Env overrides for secrets, so users can keep them out of the file/flags.
 	if v := os.Getenv("VIBEBOT_SASL_PASSWORD"); v != "" {
@@ -173,6 +186,9 @@ func parseRuntimeOptions(args []string, cwd string) (runtimeOptions, error) {
 	}
 	if v := os.Getenv("GEMINI_API_KEY"); v != "" {
 		opts.GeminiAPIKey = v
+	}
+	if v := os.Getenv("XAI_API_KEY"); v != "" {
+		opts.XAIAPIKey = v
 	}
 
 	return opts, nil
@@ -184,9 +200,11 @@ func bindRuntimeFlags(fs *flag.FlagSet, opts runtimeOptions) runtimeFlagValues {
 		dbPath:       fs.String("db", opts.DBPath, "path to SQLite event store (':memory:' allowed)"),
 		seedDir:      fs.String("seed", opts.SeedDir, "directory containing characters.yaml and groups.yaml"),
 		tick:         fs.Duration("tick", opts.Tick, "world ticker interval"),
-		llmProvider:  fs.String("llm", opts.LLMProvider, "LLM provider: echo|gemini"),
+		llmProvider:  fs.String("llm", opts.LLMProvider, "LLM provider: echo|gemini|xai"),
 		geminiModel:  fs.String("gemini-model", opts.GeminiModel, "Gemini model id"),
 		geminiAPIKey: fs.String("gemini-api-key", opts.GeminiAPIKey, "Gemini API key (env GEMINI_API_KEY overrides)"),
+		xaiModel:     fs.String("xai-model", opts.XAIModel, "xAI model id"),
+		xaiAPIKey:    fs.String("xai-api-key", opts.XAIAPIKey, "xAI API key (env XAI_API_KEY overrides)"),
 		ircServer:    fs.String("irc-server", opts.IRC.Server, "IRC server (omit to disable IRC)"),
 		ircPort:      fs.Int("irc-port", opts.IRC.Port, "IRC port"),
 		ircTLS:       fs.Bool("irc-tls", opts.IRC.TLS, "use TLS for IRC"),
@@ -241,6 +259,12 @@ func applyConfigFile(opts *runtimeOptions, path string, explicit bool) error {
 	}
 	if cfg.GeminiAPIKey != "" {
 		opts.GeminiAPIKey = cfg.GeminiAPIKey
+	}
+	if cfg.XAIModel != "" {
+		opts.XAIModel = cfg.XAIModel
+	}
+	if cfg.XAIAPIKey != "" {
+		opts.XAIAPIKey = cfg.XAIAPIKey
 	}
 	if cfg.IRC.Server != "" {
 		opts.IRC.Server = cfg.IRC.Server

@@ -43,7 +43,10 @@ func main() {
 		os.Exit(2)
 	}
 
-	model, modelID, err := selectLLM(opts.LLMProvider, opts.GeminiModel, opts.GeminiAPIKey)
+	if opts.LLMProvider == "xai" && opts.GeminiAPIKey == "" {
+		logger.Warn("xai provider without gemini key: memory embeddings will use the echo stub; persisted vectors will not match real embeddings")
+	}
+	model, modelID, err := selectLLM(opts.LLMProvider, opts.GeminiModel, opts.GeminiAPIKey, opts.XAIModel, opts.XAIAPIKey)
 	if err != nil {
 		logger.Error("llm select", "err", err)
 		os.Exit(1)

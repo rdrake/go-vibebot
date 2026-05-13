@@ -3,10 +3,13 @@ seed: seed
 tick: 30s
 llm: echo
 gemini_model: gemini-flash-lite-latest
+xai_model: grok-4-1-fast-reasoning
 # Putting secrets in this file is convenient but risky if the repo is shared.
 # Either fill these in and keep the file un-committed, or leave them blank and
-# export GEMINI_API_KEY / VIBEBOT_SASL_PASSWORD in the environment instead.
+# export GEMINI_API_KEY / XAI_API_KEY / VIBEBOT_SASL_PASSWORD in the
+# environment instead.
 # gemini_api_key: ""
+# xai_api_key: ""
 
 irc:
   server: fractalrealities.afternet.org

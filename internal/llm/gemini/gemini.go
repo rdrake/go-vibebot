@@ -6,17 +6,16 @@
 package gemini
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/llm"
+	"github.com/afternet/go-vibebot/internal/llm/httpjson"
 )
 
 // DefaultEndpoint is the public Generative Language API base.
@@ -25,8 +24,8 @@ const DefaultEndpoint = "https://generativelanguage.googleapis.com"
 // DefaultModel is the rolling-latest flash-lite alias (cheapest, fast).
 const DefaultModel = "gemini-flash-lite-latest"
 
-// DefaultEmbeddingModel is Google's current text-embedding model.
-const DefaultEmbeddingModel = "text-embedding-004"
+// DefaultEmbeddingModel is Google's current Gemini API embedding model.
+const DefaultEmbeddingModel = "gemini-embedding-001"
 
 // EmbeddingModelID is the stable namespaced identifier persisted alongside
 // each embedding row. It is NOT the wire-level model string (that lives in
@@ -34,7 +33,7 @@ const DefaultEmbeddingModel = "text-embedding-004"
 // can never collide on the same model name. Change this constant when the
 // underlying embedding model changes; existing rows with stale IDs will be
 // filtered out at hydrate time until the operator deletes them.
-const EmbeddingModelID = "gemini:text-embedding-004"
+const EmbeddingModelID = "gemini:gemini-embedding-001"
 
 // Provider implements llm.LLM by calling Gemini's REST endpoints.
 type Provider struct {
@@ -105,38 +104,13 @@ func (p *Provider) post(ctx context.Context, model, action string, body any) ([]
 	if endpoint == "" {
 		endpoint = DefaultEndpoint
 	}
-	httpClient := p.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
-
 	target := fmt.Sprintf("%s/v1beta/models/%s:%s?key=%s",
 		endpoint, model, action, url.QueryEscape(p.APIKey))
-
-	buf, err := json.Marshal(body)
+	raw, status, err := httpjson.Post(ctx, p.HTTPClient, target, nil, body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("gemini: encode request: %w", err)
+		return raw, status, fmt.Errorf("gemini: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(buf))
-	if err != nil {
-		return nil, 0, fmt.Errorf("gemini: build request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(httpReq)
-	if err != nil {
-		return nil, 0, fmt.Errorf("gemini: http: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("gemini: read body: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return raw, resp.StatusCode, fmt.Errorf("gemini: HTTP %d: %s", resp.StatusCode, string(raw))
-	}
-	return raw, resp.StatusCode, nil
+	return raw, status, nil
 }
 
 func buildCompleteRequest(req llm.CompleteRequest) completeReq {

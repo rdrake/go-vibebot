@@ -16,6 +16,8 @@ seed: custom-seed
 tick: 30s
 llm: gemini
 gemini_model: gemini-test
+xai_model: grok-test
+xai_api_key: xai-cfg-key
 irc:
   server: irc.example.net
   port: 6697
@@ -45,6 +47,12 @@ irc:
 	}
 	if opts.GeminiModel != "gemini-test" {
 		t.Errorf("GeminiModel=%q", opts.GeminiModel)
+	}
+	if opts.XAIModel != "grok-test" {
+		t.Errorf("XAIModel=%q", opts.XAIModel)
+	}
+	if opts.XAIAPIKey != "xai-cfg-key" {
+		t.Errorf("XAIAPIKey=%q", opts.XAIAPIKey)
 	}
 	if opts.IRC.Server != "irc.example.net" || opts.IRC.Port != 6697 || !opts.IRC.TLS ||
 		opts.IRC.Nick != "botnick" || opts.IRC.Channel != "#bots" {
@@ -106,10 +114,12 @@ irc:
 func TestRuntimeOptionsLoadsSASLAndGeminiKey(t *testing.T) {
 	t.Setenv("VIBEBOT_SASL_PASSWORD", "")
 	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("XAI_API_KEY", "")
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, defaultConfigFile)
 	if err := os.WriteFile(cfg, []byte(`
 gemini_api_key: cfg-key
+xai_api_key: xai-cfg-key
 irc:
   server: irc.example.net
   nick: botnick
@@ -127,6 +137,9 @@ irc:
 	if opts.GeminiAPIKey != "cfg-key" {
 		t.Errorf("GeminiAPIKey=%q", opts.GeminiAPIKey)
 	}
+	if opts.XAIAPIKey != "xai-cfg-key" {
+		t.Errorf("XAIAPIKey=%q", opts.XAIAPIKey)
+	}
 	if opts.IRC.SASLUser != "sasluser" || opts.IRC.SASLPass != "saslpass" {
 		t.Errorf("SASL=%+v", opts.IRC)
 	}
@@ -135,10 +148,12 @@ irc:
 func TestRuntimeOptionsEnvOverridesSecretsFromConfig(t *testing.T) {
 	t.Setenv("VIBEBOT_SASL_PASSWORD", "env-sasl-pass")
 	t.Setenv("GEMINI_API_KEY", "env-gemini-key")
+	t.Setenv("XAI_API_KEY", "env-xai-key")
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, defaultConfigFile)
 	if err := os.WriteFile(cfg, []byte(`
 gemini_api_key: cfg-key
+xai_api_key: cfg-xai-key
 irc:
   server: irc.example.net
   nick: botnick
@@ -155,6 +170,9 @@ irc:
 	}
 	if opts.GeminiAPIKey != "env-gemini-key" {
 		t.Errorf("env GEMINI_API_KEY should win, got %q", opts.GeminiAPIKey)
+	}
+	if opts.XAIAPIKey != "env-xai-key" {
+		t.Errorf("env XAI_API_KEY should win, got %q", opts.XAIAPIKey)
 	}
 	if opts.IRC.SASLPass != "env-sasl-pass" {
 		t.Errorf("env VIBEBOT_SASL_PASSWORD should win, got %q", opts.IRC.SASLPass)

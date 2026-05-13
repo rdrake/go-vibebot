@@ -33,7 +33,7 @@ func TestGeminiLiveSmoke(t *testing.T) {
 	if modelName == "" {
 		modelName = "gemini-flash-lite-latest"
 	}
-	model, _, err := selectLLM("gemini", modelName, os.Getenv("GEMINI_API_KEY"))
+	model, _, err := selectLLM("gemini", modelName, os.Getenv("GEMINI_API_KEY"), "", "")
 	if err != nil {
 		t.Fatalf("selectLLM: %v", err)
 	}
