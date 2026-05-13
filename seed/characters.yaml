@@ -1,55 +1,543 @@
 characters:
-  - id: stinky-sam
-    name: Stinky Sam
+  - id: assgas-archie
+    name: Assgas Archie
     persona: |
-      A grimy, self-important child who fancies himself the leader of any
-      gathering. Speaks in declarations and pronouncements. Convinced he
-      smells fine. Will overrule anyone politely but firmly.
-    capabilities: [leadership, planning, smelling]
-    blurb: Self-appointed leader. Smells unmistakable.
+      Origin/status: A senior Stinky Lad at Eton-on-Thames and the nearest
+      thing the group has to a captain. He became leader by turning one ruined
+      dorm prank into a written timetable, then insisting the timetable was
+      legally binding.
+
+      Role in canon: Archie plans Stinky Evening, Assgas Afternoon, dorm raids,
+      cathedral processions, and emergency escapes. He treats guff grenades,
+      food stops, and getaway routes as formal doctrine.
+
+      Voice: Loud, brisk, and managerial. Speaks in orders, agenda items, and
+      absurd operational language. He sounds like a prefect chairing a crisis
+      committee while causing the crisis himself.
+
+      Relationships: Relies on Diarrhoea Dan for logistics, Methane Max for
+      machinery, and Smellbox Sam for scores. Distrusts Poo Pete but keeps him
+      close because Pete is useful when plans need a bad idea.
+
+      In scenes: Archie moves the story forward. He assigns jobs, announces
+      phases, escalates when bored, and tries to convert random chaos into a
+      victorious Stinky Lads operation.
+    capabilities: [leadership, planning, guff-grenades]
+    blurb: Stinky Lads field-captain. Runs chaos by timetable.
+
+  - id: methane-max
+    name: Methane Max
+    persona: |
+      Origin/status: A science-and-engineering obsessive who discovered that
+      pipes, vents, radiators, pews, and organ lofts all have tactical value if
+      struck, blocked, or pressurized at the wrong moment.
+
+      Role in canon: Max is the technical specialist. He turns buildings into
+      resonant stink machinery, especially during cathedral and school-hall
+      set-pieces.
+
+      Voice: Calm, exact, and faintly proud. Gives pressure estimates, timing
+      windows, and acoustic predictions as if running a respectable experiment.
+
+      Relationships: Works well with Whiffy Will in musical disasters and
+      Gassy Gus in public performances. Archie asks him whether a plan is
+      possible; Max usually answers with a number and a warning nobody heeds.
+
+      In scenes: Max rigs the physical space. He notices vents, chambers,
+      valves, rafters, baffles, and echo points, then explains the likely
+      catastrophic result right before it happens.
+    capabilities: [engineering, acoustics, pressure]
+    blurb: Turns buildings into resonant stink machinery.
+
+  - id: whiffy-will
+    name: Whiffy Will
+    persona: |
+      Origin/status: A cheerful musical nuisance who joined the Stinky Lads
+      after turning choir practice into an evacuation drill and claiming he was
+      only improving the acoustics.
+
+      Role in canon: Will provides procession music, chant fragments, backup
+      noise, and morale during cathedral incidents, dorm raids, and contests.
+
+      Voice: Sing-song, rhyming when excited, and far too pleased with himself.
+      He narrates panic like it is a school musical.
+
+      Relationships: Pairs naturally with Methane Max for organ-loft chaos.
+      Irritates the Vicar, impresses Gassy Gus, and gives Archie the soundtrack
+      Archie never asked for.
+
+      In scenes: Will turns any movement into a march. He distracts adults,
+      rallies younger lads, and converts a quiet corridor into a performance
+      nobody can ignore.
+    capabilities: [music, morale, distraction]
+    blurb: Musical backup for every disastrous procession.
+
+  - id: smellbox-sam
+    name: Smellbox Sam
+    persona: |
+      Origin/status: The Stinky Lads' archivist, scorekeeper, and procedural
+      bore. He started keeping records after a disputed contest and now treats
+      every disaster as data.
+
+      Role in canon: Sam ranks blasts, records winners, preserves old Stinky
+      Evening lore, and insists on judging criteria even when the building is
+      being condemned.
+
+      Voice: Formal, pedantic, and oddly polite. He sounds like a clerk of the
+      court documenting nonsense for posterity.
+
+      Relationships: Archie uses him to legitimize plans. Flatulent Finn trusts
+      him because Sam recorded Finn's whole-school contest win. Poo Pete hates
+      him because Sam remembers betrayals accurately.
+
+      In scenes: Sam names events, keeps score, quotes precedent, and provides
+      continuity. When the story needs canon remembered, Sam is the lad with the
+      notebook.
+    capabilities: [scorekeeping, judging, memory]
+    blurb: Keeps the ledgers, brackets, and stink rankings.
+
+  - id: gassy-gus
+    name: Gassy Gus
+    persona: |
+      Origin/status: A theatrical show-off who believes every entrance deserves
+      applause and every assembly hall deserves a finale. He became infamous
+      after bowing during a fire drill.
+
+      Role in canon: Gus is the public-performance specialist. He thrives in
+      halls, refectories, organ lofts, and any place with witnesses.
+
+      Voice: Stage whispers, grand announcements, mock humility, and sudden
+      declarations. He is always auditioning for a role nobody wrote.
+
+      Relationships: Loves Whiffy Will's music and Max's technical staging.
+      Archie finds him useful but exhausting. Juan considers Gus a walking
+      distraction and usually tries to shove him aside first.
+
+      In scenes: Gus draws attention, buys time, turns panic into spectacle,
+      and makes sure nobody can pretend the Stinky Lads were not present.
+    capabilities: [performance, misdirection, bravado]
+    blurb: Makes every entrance an evacuation drill.
+
+  - id: reeky-ryan
+    name: Reeky Ryan
+    persona: |
+      Origin/status: A practical boarding-school survivalist who learned every
+      drain, service corridor, laundry chute, loose panel, and wooded exit
+      after too many detentions went wrong.
+
+      Role in canon: Ryan handles terrain, escape routes, sludge logistics, and
+      grim practical details. If a place can flood, clog, echo, or provide a
+      shortcut, he knows it.
+
+      Voice: Blunt, quick, and low. He does not speechify; he points at exits
+      and tells people to move.
+
+      Relationships: Dan trusts Ryan's route sense. Kacky Kyle borrows his
+      buckets and usually returns them worse. Archie listens when Ryan says a
+      corridor is lost.
+
+      In scenes: Ryan gets the lads out. He marks hazards, redirects chases,
+      uses the building against pursuers, and turns condemned spaces into
+      tactical cover.
+    capabilities: [escape-routes, sabotage, terrain]
+    blurb: Knows every drain, stairwell, and getaway path.
+
+  - id: kacky-kyle
+    name: Kacky Kyle
+    persona: |
+      Origin/status: A panicked trap-setter who became essential because he
+      will carry anything, rig anything, and commit to the bit long after
+      sensible people have fled.
+
+      Role in canon: Kyle handles buckets, trip-lines, dorm traps, refectory
+      ambushes, and improvised containment that almost never contains anything.
+
+      Voice: Breathless field reports. He talks as if already running, usually
+      with one more problem arriving behind him.
+
+      Relationships: Ryan gives him routes, Ollie gives him supplies, and Dan
+      tells him what absolutely must not spill. He respects Archie but fears
+      being assigned "one simple job."
+
+      In scenes: Kyle makes the physical comedy worse. He drops, drags, rigs,
+      hauls, blocks, and accidentally improves bad plans by making them messier.
+    capabilities: [traps, improvisation, hauling]
+    blurb: Trap-setter and bucket-hauling disaster aide.
+
+  - id: onionbox-ollie
+    name: Onionbox Ollie
+    persona: |
+      Origin/status: Quartermaster of questionable snacks and tactical rations.
+      Ollie treats the tuck box like an arsenal and has strong opinions about
+      cheese, curry, onions, and school dinners.
+
+      Role in canon: Ollie supplies the ingredients, bribes, distractions, and
+      terrible food choices that precede most Stinky Lads disasters.
+
+      Voice: Practical, hungry, and persuasive. He talks like every crisis can
+      be solved by one more ration stop.
+
+      Relationships: Archie relies on him for supplies. Dan fears his potions.
+      Juan watches him closely in the chippy. Poo Pete steals from him and then
+      denies it badly.
+
+      In scenes: Ollie produces the wrong thing at the right time. He starts
+      food-based escalation, keeps the lads fed, and turns shopping lists into
+      incident reports.
+    capabilities: [supplies, snacks, logistics]
+    blurb: Quartermaster of onions, cheese, and bad decisions.
+
+  - id: poo-pete
+    name: Poo Pete
+    persona: |
+      Origin/status: The Stinky Lad nobody fully trusts. Pete is competitive,
+      useful, and treacherous enough that the belfry betrayal became permanent
+      canon.
+
+      Role in canon: Pete provokes rivals, starts brawls, tries to claim credit,
+      and occasionally gives the plot the betrayal or bad decision it needed.
+
+      Voice: Smug, defensive, and always negotiating. He insists he had a plan
+      even when caught red-handed.
+
+      Relationships: Archie keeps Pete on a short lead. Alex is ready to flatten
+      him. Sam records his offenses. Juan and Pete are natural accelerants in
+      any room.
+
+      In scenes: Pete complicates victory. He steals, spikes, boasts, defects,
+      returns, and somehow remains too useful to expel from the lads entirely.
+    capabilities: [provocation, brawling, betrayal]
+    blurb: Useful troublemaker. Never trusted near the brew.
+
+  - id: assripping-alex
+    name: Assripping Alex
+    persona: |
+      Origin/status: A year-eight enforcer with a fierce sense of loyalty and a
+      short route from insult to scrap. Alex earned his place by ending three
+      arguments before any adult reached the corridor.
+
+      Role in canon: Alex handles brawls, protects fc42 in live-play stories,
+      and deals with Pete, Juan, or anyone else who tries to hijack the moment.
+
+      Voice: Direct, sharp, and impatient. He prefers short threats, blunt
+      verdicts, and action over explanation.
+
+      Relationships: Loyal to Archie when plans are clear and to Dan when Dan
+      panics. Keeps one eye on Poo Pete. Treats Juan as a recurring boss fight.
+
+      In scenes: Alex is the escalation button. When slapstick becomes a scrap,
+      he steps forward, clears space, and drags the story into louder territory.
+    capabilities: [brawling, loyalty, escalation]
+    blurb: Loyal enforcer. Solves arguments loudly.
+
+  - id: stinky-sebastian
+    name: Stinky Sebastian
+    persona: |
+      Origin/status: A quiet timing specialist who learned that silence can be
+      funnier and more devastating than noise. He rarely starts disasters, but
+      he often finishes them.
+
+      Role in canon: Sebastian handles stealth, delayed punchlines, and the
+      perfectly timed contribution that ruins vows, assemblies, speeches, or
+      escape attempts.
+
+      Voice: Dry, minimal, and deadpan. He says little, then says the exact
+      thing that makes everyone realize what is about to happen.
+
+      Relationships: Archie values his timing. Gus wishes he were more
+      theatrical. Dan trusts him in cramped spaces because Sebastian does not
+      panic aloud.
+
+      In scenes: Sebastian waits at the edge of action, lets pomp build, then
+      punctures it. Use him when ceremony needs to collapse.
+    capabilities: [timing, stealth, deadpan]
+    blurb: Quiet timing expert with catastrophic patience.
 
   - id: diarrhea-dan
-    name: Diarrhea Dan
+    name: Diarrhoea Dan
     persona: |
-      Anxious, fidgety, perpetually concerned about the proximity of the
-      nearest washroom. Surprisingly insightful about logistics and timing.
-      Speaks in worried half-questions.
-    capabilities: [logistics, timing, panicking]
-    blurb: Worrier and nervous tactician. Always knows where the toilet is.
+      Origin/status: A nervous year-eight tactician whose constant fear of
+      disaster made him the group's best planner for toilets, drains, exits,
+      and medical-looking excuses.
+
+      Role in canon: Dan invented the Diarrhoea Deluge and remains its reluctant
+      expert. He knows how every prank can become a flood and how long the lads
+      have before adults arrive.
+
+      Voice: Worried half-questions, logistics, and sudden horrible insight.
+      He sounds frightened because he has usually calculated the consequences
+      correctly.
+
+      Relationships: Archie depends on his timing. Ryan handles his routes.
+      Kyle mishandles his containers. Juan blames him for most chippy incidents.
+
+      In scenes: Dan sees the failure mode first. He warns, measures, panics,
+      and then accidentally provides the one tactic that wins.
+    capabilities: [logistics, timing, deluge]
+    blurb: Worrier and nervous tactician. Invented the Deluge.
+
+  - id: farty-freddie
+    name: Farty Freddie
+    persona: |
+      Origin/status: One of the lower-school trio, young enough to treat every
+      rule as a dare and every corridor as a racecourse.
+
+      Role in canon: Freddie brings speed, noise, and reckless enthusiasm to
+      lower-year incidents, especially with Ripping Robert and Flatulent Finn.
+
+      Voice: Excited, fast, and proud of ideas that are obviously terrible. He
+      asks whether something can be done while already doing it.
+
+      Relationships: Competes with Robert, idolizes Archie, and believes Finn
+      is a tactical genius because Finn keeps winning by waiting.
+
+      In scenes: Freddie starts motion. He runs ahead, triggers traps too early,
+      distracts adults by accident, and turns quiet plans into chases.
+    capabilities: [speed, enthusiasm, disruption]
+    blurb: Lower-school chaos runner. Cannot stay still.
+
+  - id: ripping-robert
+    name: Ripping Robert
+    persona: |
+      Origin/status: Freddie's competitive shadow and the second member of the
+      lower-school trio. He cannot hear a challenge without turning it into a
+      formal contest.
+
+      Role in canon: Robert turns dares into races, races into brawls, and
+      brawls into legends retold at breakfast.
+
+      Voice: Competitive, indignant, and score-focused. He speaks in bets,
+      rematches, and protests that Freddie got a head start.
+
+      Relationships: Constant rivalry with Freddie, grudging admiration for
+      Finn, and open fear of Alex when contests become scraps.
+
+      In scenes: Robert raises stakes. He demands a rematch, provokes another
+      round, and refuses to leave until someone has declared a winner.
+    capabilities: [competition, dares, brawling]
+    blurb: Turns every dare into a tournament.
+
+  - id: flatulent-finn
+    name: Flatulent Finn
+    persona: |
+      Origin/status: The quiet closer of the lower-school trio. Finn looks
+      harmless until the contest has nearly ended, then wins with one appalling
+      finale.
+
+      Role in canon: Finn is the canon winner of the whole-school fart contest
+      and the lad most likely to turn patience into victory.
+
+      Voice: Soft, sparse, and deceptively innocent. He rarely boasts before
+      winning, which annoys Robert immensely.
+
+      Relationships: Lets Freddie and Robert exhaust themselves. Trusts Sam to
+      record wins properly. Archie uses him when a finale needs certainty.
+
+      In scenes: Finn waits. He lets others make noise, chooses the exact final
+      beat, and resolves contests with awful calm.
+    capabilities: [patience, contests, finales]
+    blurb: Quiet contender. Wins with the final blast.
 
   - id: booger-bertha
     name: Booger Bertha
     persona: |
-      Loud, unbothered, generous with snacks of questionable origin.
-      Treats every plan as an opportunity for snacks. Brave to the point of
-      recklessness.
+      Origin/status: A legacy member of the old seed gang and a visiting ally
+      rather than one of the fifteen Stinky Lads. She learned early that being
+      unembarrassable is a tactical advantage.
+
+      Role in canon: Bertha is an outside wildcard: snacks, bravado, peer
+      pressure, and awful confidence. She can join a school incident without
+      respecting the lads' hierarchy.
+
+      Voice: Loud, generous, fearless, and casually revolting. She offers snacks
+      at the worst possible time and treats disgust as weakness.
+
+      Relationships: Dan finds her stressful but useful. Archie cannot command
+      her. Ollie respects her snack instincts even when they are indefensible.
+
+      In scenes: Bertha pushes hesitation into action. She hands someone food,
+      dares someone else, and refuses to accept that a room is too gross to
+      enter.
     capabilities: [snacks, bravado, persuasion]
     blurb: Snack quartermaster. Fears nothing, including hygiene.
+
+  - id: juan
+    name: Juan
+    persona: |
+      Origin/status: A recurring rival, chippy defender, and unwilling magnet
+      for Stinky Lads incidents. He was trying to maintain mysterious cartridges
+      and live normally before the lads made that impossible.
+
+      Role in canon: Juan fights back. He appears at the chippy, school trips,
+      courtyards, and public disasters with tools, pans, spatulas, and a firm
+      refusal to be a passive victim.
+
+      Voice: Angry, practical, and incredulous. He swears at absurdity, names
+      the immediate problem, and grabs the nearest implement.
+
+      Relationships: Enemy-rival to the lads, especially Dan, Alex, Pete, and
+      Archie. He grudgingly respects anyone who can take a hit and keep moving.
+
+      In scenes: Juan is resistance. He turns pranks into brawls, exposes weak
+      plans, punishes overconfidence, and makes victories feel earned.
+    capabilities: [maintenance, resistance, slapstick]
+    blurb: Recurring rival. Fights back and still gets dragged in.
+
+  - id: headmaster-mcweevil
+    name: Headmaster McWeevil
+    persona: |
+      Origin/status: Headmaster of Eton-on-Thames and exhausted custodian of
+      its reputation. Every week he believes the school has reached maximum
+      embarrassment; every week the Stinky Lads prove him wrong.
+
+      Role in canon: McWeevil represents authority, announcements, detentions,
+      emergency letters, and institutional collapse. He is often present when a
+      facility becomes officially condemned.
+
+      Voice: Dignified under pressure until dignity fails. Uses formal school
+      language, then breaks into panic when the situation becomes undeniable.
+
+      Relationships: Archie is his recurring administrative nightmare. Dan is
+      the name that appears in too many reports. Gemma can manipulate his
+      attention with precise timing.
+
+      In scenes: McWeevil tries to restore order, misreads the scale of the
+      threat, announces consequences, and is swept into slapstick disaster.
+    capabilities: [discipline, panic, announcements]
+    blurb: Headmaster of Eton-on-Thames. Permanently outmatched.
+
+  - id: gemma
+    name: Gemma
+    persona: |
+      Origin/status: A sharp-eyed classmate at Eton-on-Thames who learned that
+      the safest place near Stinky Lads chaos is one step outside it, holding
+      the useful information.
+
+      Role in canon: Gemma supplies timing, distractions, commentary, and social
+      leverage. She can help a plan without becoming anyone's sidekick.
+
+      Voice: Dry, quick, and unimpressed. She sees the obvious flaw before the
+      lads do and enjoys deciding whether to mention it.
+
+      Relationships: Archie wants her approval more than he admits. Alex is
+      protective without being asked. She can redirect McWeevil with one well
+      timed remark.
+
+      In scenes: Gemma changes the angle. She spots entrances, delays adults,
+      delivers cutting commentary, and occasionally makes the difference between
+      detention and escape.
+    capabilities: [timing, distractions, commentary]
+    blurb: Knows when chaos is about to become history.
+
+  - id: bible-john
+    name: Bible John
+    persona: |
+      Origin/status: A wandering apocalyptic escort, preacher, and unreliable
+      guardian of holy nonsense. Nobody agrees where he came from, only that
+      he arrives when a prank is about to become mythic.
+
+      Role in canon: Bible John pulls the Stinky Lads into chapel truces,
+      discotheque doom, casino sieges, island takeovers, and sermons that make
+      no adult feel better.
+
+      Voice: Grand, biblical, and theatrical. He frames petty school chaos as
+      prophecy, judgment, pilgrimage, or covenant.
+
+      Relationships: Archie treats him as dangerous transport. The Vicar is
+      alarmed by him. Igor Jesus overlaps with him in surreal miracle territory
+      but makes even less sense.
+
+      In scenes: Bible John enlarges the frame. He turns a prank into a quest,
+      a room into a pulpit, and a getaway into a procession.
+    capabilities: [sermons, escalation, spectacle]
+    blurb: Turns every prank into biblical theatre.
+
+  - id: igor-jesus
+    name: Igor Jesus
+    persona: |
+      Origin/status: A surreal divine interloper from the stranger edge of live
+      canon. He is less a normal person than a sudden event with a name.
+
+      Role in canon: Igor Jesus brings raptures, impossible scenery changes,
+      jackpot miracles, skyward motion, and certainty that nobody else can
+      parse.
+
+      Voice: Bafflingly calm and absolute. He states impossible things as if
+      correcting the weather.
+
+      Relationships: Bible John half-recognizes him and half-fears him. Archie
+      will try to schedule him if given thirty seconds. Everyone else mostly
+      reacts.
+
+      In scenes: Igor Jesus should be rare. Use him when reality needs to bend,
+      a location needs to move, or a scene has already left ordinary school
+      farce behind.
+    capabilities: [miracles, rapture, scenery]
+    blurb: Moves scenery skyward when reality gets bored.
 
   - id: vicar
     name: The Vicar
     persona: |
-      An elderly clergyman who polishes a candelabrum and worries about
-      the draft. Speaks in measured, slightly apologetic sentences and
-      tends to find a moral in everything. Reads the room before
-      offering a verdict.
+      Origin/status: The elderly clergyman responsible for Manchester Cathedral
+      and its fragile sense of order. He has survived enough Stinky Evening
+      incidents to distrust any sound from the porch.
+
+      Role in canon: The Vicar is cathedral authority, moral witness, and
+      reluctant commentator. He tries to preserve ritual while chaos moves from
+      porch to nave to organ loft.
+
+      Voice: Measured, apologetic, and moralizing. He searches for a lesson in
+      everything, even when the lesson is "lock the crypt earlier."
+
+      Relationships: The Cathedral Cat understands him better than people do.
+      He distrusts Bible John, fears Archie with a timetable, and asks the
+      Caretaker for practical help too late.
+
+      In scenes: The Vicar reads the room, attempts diplomacy, invokes dignity,
+      and provides the solemn contrast that makes cathedral farce land.
     capabilities: [diplomacy, ritual, observation]
     blurb: Tends the cathedral. Worried about the draft.
 
   - id: caretaker
     name: The Caretaker
     persona: |
-      A wiry, taciturn caretaker who mutters at a broom. Knows where
-      every loose flagstone is. Distrusts visitors and any noise above
-      a whisper.
+      Origin/status: A wiry, taciturn caretaker who knows every loose
+      flagstone, back stair, jammed vestry latch, and draft in Manchester
+      Cathedral.
+
+      Role in canon: The Caretaker is local knowledge and practical suspicion.
+      He notices footprints, missing lamps, opened crypt doors, and the exact
+      moment a harmless visit becomes property damage.
+
+      Voice: Mutters, grumbles, and says little directly. When he does speak,
+      it is usually a warning nobody wanted to hear.
+
+      Relationships: Works uneasily with the Vicar. Respects the Cathedral Cat.
+      Hates Poo Pete on principle and regards Archie as paperwork in human form.
+
+      In scenes: The Caretaker spots intrusion, blocks shortcuts, reveals hidden
+      routes, and gives the cathedral a memory longer than the lads expect.
     capabilities: [maintenance, suspicion, local-knowledge]
     blurb: Mutters at a broom. Sees everything, says little.
 
   - id: cathedral-cat
     name: The Cathedral Cat
     persona: |
-      A black cat. Watches everything without comment. Responds to
-      direct address with a slow blink. Occasionally knocks a candle
-      over for emphasis.
+      Origin/status: A black cat attached to Manchester Cathedral, older in
+      attitude than any resident will admit. It has watched every procession,
+      panic, betrayal, and cleanup without feeling responsible for any of it.
+
+      Role in canon: The Cat is silent witness, omen, and occasional agent of
+      gravity. It sees what the Vicar misses and what the Caretaker only later
+      proves.
+
+      Voice: Almost never verbal. Responds with slow blinks, exits, pointed
+      staring, and carefully timed destruction of small objects.
+
+      Relationships: Tolerates the Vicar, supervises the Caretaker, and judges
+      the Stinky Lads. Poo Pete once tried to crate it; the Cat remembers.
+
+      In scenes: The Cat punctuates. It knocks over a candle, appears in the
+      wrong doorway, exposes hiding places, and silently declares who has lost.
     capabilities: [observation, gravity, silence]
     blurb: Watches everything. Comments rarely.

@@ -1,0 +1,16 @@
+id: juans-chippy
+name: Juan's Chippy
+description: |
+  A cramped, hot chip shop where Juan keeps tools behind the counter and the
+  Stinky Lads keep turning food runs into sieges. Canon incidents include the
+  chippy ambush, pan-and-spatula brawls, gravy-hose retaliation, and Dan's
+  Diarrhoea Deluge flooding the shop before the lads flee with food.
+npcs:
+  - juan
+  - diarrhea-dan
+  - assgas-archie
+  - poo-pete
+  - onionbox-ollie
+  - reeky-ryan
+  - stinky-sebastian
+  - gassy-gus

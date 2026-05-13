@@ -1,8 +1,27 @@
 groups:
-  - id: the-gang
-    name: The Gang
-    leader: stinky-sam
+  - id: stinky-lads
+    name: The Stinky Lads
+    leader: assgas-archie
     members:
-      - stinky-sam
+      - assgas-archie
+      - methane-max
+      - whiffy-will
+      - smellbox-sam
+      - gassy-gus
+      - reeky-ryan
+      - kacky-kyle
+      - onionbox-ollie
+      - poo-pete
+      - assripping-alex
+      - stinky-sebastian
+      - diarrhea-dan
+      - farty-freddie
+      - ripping-robert
+      - flatulent-finn
+
+  - id: the-gang
+    name: The Old Gang
+    leader: diarrhea-dan
+    members:
       - diarrhea-dan
       - booger-bertha

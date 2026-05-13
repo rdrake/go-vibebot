@@ -1,11 +1,22 @@
 id: cathedral
-name: The Cathedral
+name: Manchester Cathedral
 description: |
-  A cavernous, dusty cathedral. Light spears down through stained glass
-  onto the worn flagstones. A vicar polishes a candelabrum. A caretaker
-  mutters at a broom. A cat watches everything without comment.
+  A cavernous, dusty cathedral and recurring Stinky Evening target. Light
+  spears through stained glass onto worn flagstones while the Vicar tries
+  to preserve dignity, the Caretaker mutters at every loose stone, and the
+  Cathedral Cat watches for intruders. In live canon the Stinky Lads have
+  used the porch, nave, organ loft, crypts, quire, and belfry for processions,
+  guff symphonies, relic-room chaos, and narrow escapes.
 # The first npc in the list is the scene leader (synthesizes the round).
 npcs:
   - vicar
   - caretaker
   - cathedral-cat
+  - assgas-archie
+  - diarrhea-dan
+  - gassy-gus
+  - methane-max
+  - whiffy-will
+  - poo-pete
+  - assripping-alex
+  - bible-john

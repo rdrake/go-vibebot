@@ -1,0 +1,28 @@
+id: eton-on-thames
+name: Eton-on-Thames
+description: |
+  A posh boarding school that became the Stinky Lads' home ground in live
+  canon. Its dormitories, assembly hall, refectory, chapel, pool, rugby
+  pitch, science labs, and condemned corridors are a repeating circuit for
+  Assgas Afternoon, Stinky Evening, Diarrhoea Deluge incidents, outbreaks,
+  brawls, detentions, and dawn escape plans. The Headmaster tries to restore
+  order; the lads treat his announcements as weather.
+npcs:
+  - headmaster-mcweevil
+  - assgas-archie
+  - methane-max
+  - whiffy-will
+  - smellbox-sam
+  - gassy-gus
+  - reeky-ryan
+  - kacky-kyle
+  - onionbox-ollie
+  - poo-pete
+  - assripping-alex
+  - stinky-sebastian
+  - diarrhea-dan
+  - farty-freddie
+  - ripping-robert
+  - flatulent-finn
+  - gemma
+  - juan

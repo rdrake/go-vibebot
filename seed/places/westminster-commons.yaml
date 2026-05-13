@@ -1,0 +1,17 @@
+id: westminster-commons
+name: Westminster Commons
+description: |
+  The public-gallery-and-chamber version of the Stinky Lads' PMQs field trip:
+  coach chaos on arrival, Juan fighting back, Mr. Pringle losing control, MPs
+  slipping through political slapstick, and the chamber eventually evacuated
+  and condemned. Use this for school-trip set-pieces rather than ordinary
+  dormitory chaos.
+npcs:
+  - headmaster-mcweevil
+  - juan
+  - assgas-archie
+  - methane-max
+  - whiffy-will
+  - assripping-alex
+  - diarrhea-dan
+  - stinky-sebastian
