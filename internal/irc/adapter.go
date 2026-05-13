@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
+	"github.com/afternet/go-vibebot/internal/store"
 	"github.com/lrstanley/girc"
 )
 
@@ -68,6 +69,10 @@ func New(cfg Config, w api.WorldAPI) (*Adapter, error) {
 }
 
 // Run blocks, dialing the server and handling messages until ctx is done.
+// Disconnects (PING timeout, transient network failure) trigger reconnect
+// with exponential backoff capped at reconnectMax; a connection that
+// stays up longer than reconnectStable resets backoff to the initial
+// value so a single bad day doesn't permanently penalize cadence.
 //
 // The client requests IRCv3 `batch` and `draft/multiline` capabilities at
 // CAP negotiation; when both are granted, long outbound messages are
@@ -75,6 +80,57 @@ func New(cfg Config, w api.WorldAPI) (*Adapter, error) {
 // message to capability-aware receivers). Otherwise the adapter falls
 // back to chunked PRIVMSGs.
 func (a *Adapter) Run(ctx context.Context) error {
+	const (
+		reconnectInit   = time.Second
+		reconnectMax    = time.Minute
+		reconnectStable = 30 * time.Second
+	)
+	backoff := reconnectInit
+	for {
+		start := time.Now()
+		err := a.connectOnce(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
+		if !retryableConnectError(err) {
+			return err
+		}
+		stable := time.Since(start) > reconnectStable
+		if stable {
+			backoff = reconnectInit
+		}
+		a.logger.Warn("irc connection lost; reconnecting", "err", err, "in", backoff)
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
+		case <-timer.C:
+		}
+		if !stable {
+			backoff *= 2
+			if backoff > reconnectMax {
+				backoff = reconnectMax
+			}
+		}
+	}
+}
+
+func retryableConnectError(err error) bool {
+	var invalidConfig *girc.InvalidConfigError
+	if errors.As(err, &invalidConfig) {
+		return false
+	}
+	var eventErr *girc.EventError
+	if errors.As(err, &eventErr) && strings.Contains(strings.ToLower(eventErr.Error()), "sasl") {
+		return false
+	}
+	return true
+}
+
+// connectOnce blocks in Connect until disconnect or ctx cancellation,
+// returning the connect error.
+func (a *Adapter) connectOnce(ctx context.Context) error {
 	gcfg := girc.Config{
 		Server: a.cfg.Server,
 		Port:   a.cfg.Port,
@@ -105,12 +161,17 @@ func (a *Adapter) Run(ctx context.Context) error {
 		a.handleMessage(ctx, c, e)
 	})
 
+	done := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		client.Close()
+		select {
+		case <-ctx.Done():
+			client.Close()
+		case <-done:
+		}
 	}()
-
-	return client.Connect()
+	err := client.Connect()
+	close(done)
+	return err
 }
 
 func (a *Adapter) handleMessage(ctx context.Context, c *girc.Client, e girc.Event) {
@@ -142,6 +203,8 @@ func (a *Adapter) handleMessage(ctx context.Context, c *girc.Client, e girc.Even
 		a.cmdNudge(ctx, cmd.Args, reply)
 	case "summon":
 		a.cmdSummon(ctx, cmd.Args, reply)
+	case "snapshot":
+		a.cmdSnapshot(ctx, reply)
 	default:
 		// ignore unknown !commands
 	}
@@ -275,17 +338,13 @@ func (a *Adapter) cmdInject(ctx context.Context, args string, reply func(string)
 }
 
 func (a *Adapter) cmdLog(ctx context.Context, args string, reply func(string)) {
-	dur := time.Hour
-	if args != "" {
-		if d, err := time.ParseDuration(args); err == nil {
-			dur = d
-		}
-	}
+	dur, includeAmbient := parseLogArgs(args)
 	entries, err := a.api.Log(ctx, dur)
 	if err != nil {
 		reply("log failed: " + err.Error())
 		return
 	}
+	entries = filterLogEntries(entries, includeAmbient)
 	if len(entries) == 0 {
 		reply("(no events in window)")
 		return
@@ -299,6 +358,36 @@ func (a *Adapter) cmdLog(ctx context.Context, args string, reply func(string)) {
 		lines = append(lines, formatLogEntry(ent))
 	}
 	reply(strings.Join(lines, "\n"))
+}
+
+func parseLogArgs(args string) (time.Duration, bool) {
+	dur := time.Hour
+	includeAmbient := false
+	for _, tok := range strings.Fields(args) {
+		switch tok {
+		case "--ambient":
+			includeAmbient = true
+		default:
+			if d, err := time.ParseDuration(tok); err == nil {
+				dur = d
+			}
+		}
+	}
+	return dur, includeAmbient
+}
+
+func filterLogEntries(entries []api.LogEntry, includeAmbient bool) []api.LogEntry {
+	if includeAmbient {
+		return entries
+	}
+	out := make([]api.LogEntry, 0, len(entries))
+	for _, ent := range entries {
+		if ent.Actor == store.ActorWorld && ent.Kind == string(store.KindAmbient) {
+			continue
+		}
+		out = append(out, ent)
+	}
+	return out
 }
 
 // formatLogEntry renders one log line for IRC output. Empty Text fields
@@ -335,4 +424,29 @@ func (a *Adapter) cmdSummon(ctx context.Context, args string, reply func(string)
 		return
 	}
 	reply("summoned.")
+}
+
+func (a *Adapter) cmdSnapshot(ctx context.Context, reply func(string)) {
+	chars, err := a.api.Characters(ctx)
+	if err != nil {
+		reply("snapshot failed: " + err.Error())
+		return
+	}
+	places, err := a.api.Places(ctx)
+	if err != nil {
+		reply("snapshot failed: " + err.Error())
+		return
+	}
+	lines := make([]string, 0, len(places)+2)
+	lines = append(lines, fmt.Sprintf("snapshot: characters: %d; places: %d", len(chars), len(places)))
+	if len(places) == 0 {
+		lines = append(lines, "places: none registered")
+	} else {
+		lines = append(lines, "places:")
+		for _, p := range places {
+			lines = append(lines, fmt.Sprintf("- %s scene=%s leader=%s members=%d",
+				p.ID, p.SceneID, p.Leader, len(p.Members)))
+		}
+	}
+	reply(strings.Join(lines, "\n"))
 }

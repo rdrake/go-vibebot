@@ -1,0 +1,54 @@
+package irc
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/afternet/go-vibebot/internal/api"
+)
+
+type fakeWorld struct {
+	mu sync.Mutex
+
+	LogReturn        []api.LogEntry
+	CharactersReturn []api.CharacterRef
+	PlacesReturn     []api.PlaceRef
+
+	LogErr        error
+	CharactersErr error
+	PlacesErr     error
+
+	LogCalls []time.Duration
+}
+
+var _ api.WorldAPI = (*fakeWorld)(nil)
+
+func (f *fakeWorld) InjectEvent(context.Context, api.SceneID, string, string) error { return nil }
+func (f *fakeWorld) Summon(context.Context, api.PlaceID) error                      { return nil }
+func (f *fakeWorld) Nudge(context.Context, api.CharacterID) error                   { return nil }
+func (f *fakeWorld) Where(context.Context, api.CharacterID) (api.SceneSnapshot, error) {
+	return api.SceneSnapshot{}, errors.New("not implemented in fake")
+}
+func (f *fakeWorld) Who(context.Context, api.SceneID) ([]api.CharacterRef, error) {
+	return nil, errors.New("not implemented in fake")
+}
+func (f *fakeWorld) Describe(context.Context, string) (string, error) {
+	return "", errors.New("not implemented in fake")
+}
+
+func (f *fakeWorld) Log(_ context.Context, since time.Duration) ([]api.LogEntry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.LogCalls = append(f.LogCalls, since)
+	return f.LogReturn, f.LogErr
+}
+
+func (f *fakeWorld) Characters(context.Context) ([]api.CharacterRef, error) {
+	return f.CharactersReturn, f.CharactersErr
+}
+
+func (f *fakeWorld) Places(context.Context) ([]api.PlaceRef, error) {
+	return f.PlacesReturn, f.PlacesErr
+}
