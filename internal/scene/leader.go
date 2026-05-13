@@ -3,6 +3,7 @@ package scene
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/afternet/go-vibebot/internal/api"
@@ -10,6 +11,11 @@ import (
 	"github.com/afternet/go-vibebot/internal/llm"
 	"github.com/afternet/go-vibebot/internal/store"
 )
+
+// synthRecallK caps how many of the leader's past events the synthesis
+// prompt may pull in. Three matches the per-character respond loop;
+// trim if MaxTokens (120) starts truncating the synthesized reply.
+const synthRecallK = 3
 
 // Utterance is one member's response captured during fan-out, returned to
 // the caller so it can be persisted as a KindSpeech event before the
@@ -86,7 +92,7 @@ func (s *Scene) Orchestrate(ctx context.Context, model llm.LLM, ev store.Event) 
 		}
 	}
 
-	synth, err := s.synthesize(ctx, model, prompt, replies)
+	synth, err := s.synthesize(ctx, model, ev, prompt, replies)
 	if err != nil {
 		return OrchestrationResult{Utterances: utterances}, err
 	}
@@ -104,9 +110,13 @@ func nonLeader(members []*character.Character, leader *character.Character) []*c
 	return out
 }
 
-func (s *Scene) synthesize(ctx context.Context, model llm.LLM, prompt string, replies []string) (string, error) {
+func (s *Scene) synthesize(ctx context.Context, model llm.LLM, ev store.Event, prompt string, replies []string) (string, error) {
 	if s.Leader == nil {
 		return strings.Join(replies, " | "), nil
+	}
+	user := "Situation: " + prompt + "\n\nReactions:\n" + strings.Join(replies, "\n")
+	if recall := s.recallForSynth(ctx, ev, prompt); recall != "" {
+		user = recall + "\n\n" + user
 	}
 	req := llm.CompleteRequest{
 		System: fmt.Sprintf(
@@ -114,12 +124,43 @@ func (s *Scene) synthesize(ctx context.Context, model llm.LLM, prompt string, re
 			s.Leader.Name, s.Leader.Persona,
 		),
 		Messages: []llm.Message{
-			{Role: llm.RoleUser, Content: "Situation: " + prompt + "\n\nReactions:\n" + strings.Join(replies, "\n")},
+			{Role: llm.RoleUser, Content: user},
 		},
 		MaxTokens:   120,
 		Temperature: 0.7,
 	}
 	return model.Complete(ctx, req)
+}
+
+// recallForSynth pulls a few of the leader's past events similar to the
+// current prompt and renders them as a prelude. Returns "" on retrieval
+// failure or when only the current event surfaces — the leader still
+// synthesizes, just without recalled context.
+func (s *Scene) recallForSynth(ctx context.Context, ev store.Event, prompt string) string {
+	if s.Leader == nil || s.Leader.Memory == nil {
+		return ""
+	}
+	events, err := s.Leader.Memory.Retrieve(ctx, prompt, synthRecallK)
+	if err != nil {
+		slog.Default().Warn("leader memory retrieve failed",
+			"leader", s.Leader.ID, "err", err)
+		return ""
+	}
+	lines := make([]string, 0, len(events))
+	for _, past := range events {
+		if past.ID == ev.ID {
+			continue
+		}
+		text := store.TextOf(past)
+		if text == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s/%s: %s", past.Actor, past.Kind, text))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "Group's recent history:\n" + strings.Join(lines, "\n")
 }
 
 func renderPrompt(ev store.Event) string {

@@ -94,9 +94,9 @@ Deferred follow-ups (open):
 
 ## Smaller items (1-2 paragraph scope)
 
-### S1. Leader synthesis pulls from memory
+### ~~S1. Leader synthesis pulls from memory~~ — SHIPPED 2026-05-12
 
-Natural follow-up to the memory work that just landed. `internal/scene/leader.go`'s synthesize step renders `"Situation: " + prompt + "\n\nReactions:\n" + replies` without any historical context. The leader's *own* memory is the right thing to retrieve here — three-ish similar past events from `s.Leader.Memory.Retrieve(ctx, prompt, 3)` prepended as a "Group's recent history:" block. Same pattern as `character.recallContext`. Watch token budget: synthesis prompt + reactions + memory could get long; consider trimming to 2 events if needed. **Files**: `internal/scene/leader.go` only.
+`synthesize` now calls `recallForSynth`, which pulls up to `synthRecallK=3` similar past events from the leader's memory and prepends them as a `"Group's recent history:"` block. The current event ID is filtered out (same pattern as `character.recallContext`). Retrieval failures log-and-continue. Coverage in `internal/scene/leader_test.go`. Drop `synthRecallK` to 2 if MaxTokens (120) starts truncating synthesized output.
 
 ### S2. `!recap [character]` command
 
