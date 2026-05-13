@@ -9,3 +9,6 @@
 
 # Runtime config (may hold secrets); commit vibebot.example.yaml instead.
 /vibebot.yaml
+
+# Out-of-band log/usage dumps (large; not source).
+/remote-logs/
