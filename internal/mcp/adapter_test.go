@@ -129,6 +129,119 @@ func TestE2ESummonUnknownPlaceReturnsToolError(t *testing.T) {
 	}
 }
 
+func TestE2ESummonNewAdHoc(t *testing.T) {
+	fw := &fakeWorld{SummonNewScene: "place:spire"}
+	adapter, err := New(Config{}, fw)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	serverT, clientT := mcpsdk.NewInMemoryTransports()
+	ctx, stop := runAdapter(t, adapter, serverT)
+	t.Cleanup(stop)
+
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test-client", Version: "v0"}, nil)
+	session, err := client.Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client.Connect: %v", err)
+	}
+	defer session.Close()
+
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
+		Name: "summon",
+		Arguments: map[string]any{
+			"place_id":    "spire",
+			"npcs":        []any{"vicar", "booger-bertha"},
+			"description": "A drafty steeple.",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("expected success, got IsError; content=%v", res.Content)
+	}
+	if len(fw.SummonNewCalls) != 1 {
+		t.Fatalf("want 1 SummonNew call, got %d", len(fw.SummonNewCalls))
+	}
+	got := fw.SummonNewCalls[0]
+	if got.PlaceID != "spire" || got.Description != "A drafty steeple." || len(got.NPCs) != 2 {
+		t.Errorf("unexpected SummonNew args: %+v", got)
+	}
+	if len(fw.SummonCalls) != 0 {
+		t.Errorf("legacy Summon must not be called for ad-hoc path")
+	}
+}
+
+func TestE2ESummonLegacyStillWorks(t *testing.T) {
+	fw := &fakeWorld{}
+	adapter, err := New(Config{}, fw)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	serverT, clientT := mcpsdk.NewInMemoryTransports()
+	ctx, stop := runAdapter(t, adapter, serverT)
+	t.Cleanup(stop)
+
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test-client", Version: "v0"}, nil)
+	session, err := client.Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client.Connect: %v", err)
+	}
+	defer session.Close()
+
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
+		Name:      "summon",
+		Arguments: map[string]any{"place_id": "cathedral"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("expected success, got %v", res.Content)
+	}
+	if len(fw.SummonCalls) != 1 {
+		t.Errorf("want 1 legacy Summon, got %d", len(fw.SummonCalls))
+	}
+	if len(fw.SummonNewCalls) != 0 {
+		t.Errorf("legacy path must not call SummonNew")
+	}
+}
+
+func TestE2ESummonNewErrorSurfacesAsToolError(t *testing.T) {
+	fw := &fakeWorld{SummonNewErr: errors.New(`unknown character "ghost"`)}
+	adapter, err := New(Config{}, fw)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	serverT, clientT := mcpsdk.NewInMemoryTransports()
+	ctx, stop := runAdapter(t, adapter, serverT)
+	t.Cleanup(stop)
+
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test-client", Version: "v0"}, nil)
+	session, err := client.Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client.Connect: %v", err)
+	}
+	defer session.Close()
+
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
+		Name: "summon",
+		Arguments: map[string]any{
+			"place_id": "spire",
+			"npcs":     []any{"ghost"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool returned protocol error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected IsError=true on SummonNew failure")
+	}
+}
+
 func TestE2EReadCharactersResource(t *testing.T) {
 	fw := &fakeWorld{CharactersReturn: []api.CharacterRef{
 		{ID: "vicar", Name: "The Vicar", Blurb: "worried about the draft"},

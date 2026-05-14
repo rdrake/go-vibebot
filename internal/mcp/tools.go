@@ -64,23 +64,50 @@ func toolError(msg string) *mcpsdk.CallToolResult {
 }
 
 type SummonInput struct {
-	PlaceID string `json:"place_id" jsonschema:"the place id to summon (must be loaded)"`
+	PlaceID     string   `json:"place_id" jsonschema:"the place id to summon"`
+	NPCs        []string `json:"npcs,omitempty" jsonschema:"optional list of character ids (from Characters()) for an ad-hoc place; first id is the leader; omit entirely to summon a pre-configured place from seed/places/, do not pass an empty array"`
+	Description string   `json:"description,omitempty" jsonschema:"optional scene-setting text (recorded as an inject after summon); only meaningful when npcs is provided"`
 }
 
 type SummonOutput struct {
 	OK      bool   `json:"ok"`
+	SceneID string `json:"scene_id"`
 	Message string `json:"message"`
 }
 
-func (a *Adapter) summonHandler(ctx context.Context, _ *mcpsdk.CallToolRequest, in SummonInput) (*mcpsdk.CallToolResult, SummonOutput, error) {
+func (a *Adapter) summonHandler(
+	ctx context.Context,
+	_ *mcpsdk.CallToolRequest,
+	in SummonInput,
+) (*mcpsdk.CallToolResult, SummonOutput, error) {
 	if in.PlaceID == "" {
 		return toolError("summon: place_id is required"), SummonOutput{}, nil
 	}
-	if err := a.api.Summon(ctx, api.PlaceID(in.PlaceID)); err != nil {
+	if len(in.NPCs) == 0 {
+		if err := a.api.Summon(ctx, api.PlaceID(in.PlaceID)); err != nil {
+			return toolError(fmt.Sprintf("summon failed: %s", err.Error())), SummonOutput{}, nil
+		}
+		a.logger.Info("mcp summon", "place", in.PlaceID)
+		return nil, SummonOutput{
+			OK:      true,
+			SceneID: "place:" + in.PlaceID,
+			Message: "summoned.",
+		}, nil
+	}
+	npcs := make([]api.CharacterID, len(in.NPCs))
+	for i, s := range in.NPCs {
+		npcs[i] = api.CharacterID(s)
+	}
+	sceneID, err := a.api.SummonNew(ctx, api.PlaceID(in.PlaceID), npcs, in.Description)
+	if err != nil {
 		return toolError(fmt.Sprintf("summon failed: %s", err.Error())), SummonOutput{}, nil
 	}
-	a.logger.Info("mcp summon", "place", in.PlaceID)
-	return nil, SummonOutput{OK: true, Message: "summoned."}, nil
+	a.logger.Info("mcp summon (new)", "place", in.PlaceID, "npcs", len(npcs))
+	return nil, SummonOutput{
+		OK:      true,
+		SceneID: string(sceneID),
+		Message: "summoned.",
+	}, nil
 }
 
 type LogInput struct {
