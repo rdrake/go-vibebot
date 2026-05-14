@@ -28,6 +28,10 @@ type fakeWorld struct {
 	CharactersErr error
 	PlacesErr     error
 
+	SummonNewErr   error
+	SummonNewScene api.SceneID
+	SummonNewCalls []SummonNewCall
+
 	// Recorded calls.
 	InjectCalls []InjectCall
 	SummonCalls []SummonCall
@@ -42,6 +46,13 @@ type InjectCall struct {
 }
 
 type SummonCall struct{ PlaceID api.PlaceID }
+
+type SummonNewCall struct {
+	PlaceID     api.PlaceID
+	NPCs        []api.CharacterID
+	Description string
+}
+
 type NudgeCall struct{ CharacterID api.CharacterID }
 type LogCall struct{ Since time.Duration }
 
@@ -59,6 +70,13 @@ func (f *fakeWorld) Summon(_ context.Context, placeID api.PlaceID) error {
 	defer f.mu.Unlock()
 	f.SummonCalls = append(f.SummonCalls, SummonCall{placeID})
 	return f.SummonErr
+}
+
+func (f *fakeWorld) SummonNew(_ context.Context, placeID api.PlaceID, npcs []api.CharacterID, description string) (api.SceneID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.SummonNewCalls = append(f.SummonNewCalls, SummonNewCall{placeID, npcs, description})
+	return f.SummonNewScene, f.SummonNewErr
 }
 
 func (f *fakeWorld) Nudge(_ context.Context, characterID api.CharacterID) error {

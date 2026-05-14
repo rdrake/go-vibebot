@@ -32,6 +32,10 @@ func (a apiImpl) Summon(ctx context.Context, placeID api.PlaceID) error {
 	})
 }
 
+func (a apiImpl) SummonNew(_ context.Context, _ api.PlaceID, _ []api.CharacterID, _ string) (api.SceneID, error) {
+	return "", errors.New("world: SummonNew not yet implemented")
+}
+
 func (a apiImpl) Nudge(ctx context.Context, characterID api.CharacterID) error {
 	return a.send(ctx, func(r chan<- error) Command {
 		return Nudge{CharacterID: characterID, Reply: r}

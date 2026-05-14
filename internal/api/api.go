@@ -56,9 +56,20 @@ type WorldAPI interface {
 	// Writes — externally-driven scenarios and pokes.
 	InjectEvent(ctx context.Context, sceneID SceneID, target, description string) error
 	Summon(ctx context.Context, placeID PlaceID) error
+	// SummonNew registers a new ad-hoc place-scene at runtime using existing
+	// characters and returns the new scene id. npcs must be non-empty and
+	// reference ids returned by Characters(); the first id is the leader.
+	// If description is non-empty it is recorded as an inject scoped to the
+	// new scene after the summon event.
+	SummonNew(ctx context.Context, placeID PlaceID, npcs []CharacterID, description string) (SceneID, error)
 	Nudge(ctx context.Context, characterID CharacterID) error
 
 	// Reads — narrative-rich, suitable for direct user/LLM consumption.
+	// Where and Nudge resolve a character against the first scene that
+	// registered them (boot-time wins). A character that has been added to
+	// an ad-hoc scene via SummonNew still resolves to its boot-time scene
+	// for these calls; to act inside an ad-hoc scene use InjectEvent with
+	// the scene id returned by SummonNew.
 	Where(ctx context.Context, characterID CharacterID) (SceneSnapshot, error)
 	Log(ctx context.Context, since time.Duration) ([]LogEntry, error)
 	Who(ctx context.Context, sceneID SceneID) ([]CharacterRef, error)
