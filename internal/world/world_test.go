@@ -1033,3 +1033,58 @@ func TestSummonNewKindSummonAppendFailure(t *testing.T) {
 	cancel()
 	<-runDone
 }
+
+func TestWhereAfterSummonNewReturnsBootScene(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	// m1 starts in boot scene "scene-1".
+	if _, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"m1"}, ""); err != nil {
+		t.Fatalf("SummonNew: %v", err)
+	}
+
+	snap, err := w.API().Where(ctx, "m1")
+	if err != nil {
+		t.Fatalf("Where: %v", err)
+	}
+	if snap.SceneID != "scene-1" {
+		t.Errorf("Where should resolve to boot scene; want scene-1, got %q", snap.SceneID)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestNudgeAfterSummonNewTargetsBootScene(t *testing.T) {
+	w, _, st := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	if _, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"m1"}, ""); err != nil {
+		t.Fatalf("SummonNew: %v", err)
+	}
+	if err := w.API().Nudge(ctx, "m1"); err != nil {
+		t.Fatalf("Nudge: %v", err)
+	}
+
+	evs, err := st.Query(ctx, store.Filter{Kind: store.KindNudge})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 1 {
+		t.Fatalf("want 1 nudge event, got %d", len(evs))
+	}
+	if evs[0].SceneID != "scene-1" {
+		t.Errorf("Nudge scene: want scene-1 (boot), got %q", evs[0].SceneID)
+	}
+
+	cancel()
+	<-runDone
+}
