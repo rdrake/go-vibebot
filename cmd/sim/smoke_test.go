@@ -313,3 +313,134 @@ func TestSummonCathedralInjectAndSpeak(t *testing.T) {
 		t.Fatal("world.Run did not return after cancel")
 	}
 }
+
+func TestRuntimeAdHocPlaceSummonViaIRC(t *testing.T) {
+	st, err := store.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	seedDir := filepath.Join("..", "..", "seed")
+	chars, err := config.LoadCharacters(filepath.Join(seedDir, "characters.yaml"))
+	if err != nil {
+		t.Fatalf("load characters: %v", err)
+	}
+	groups, err := config.LoadGroups(filepath.Join(seedDir, "groups.yaml"))
+	if err != nil {
+		t.Fatalf("load groups: %v", err)
+	}
+	places, err := config.LoadPlaces(filepath.Join(seedDir, "places"))
+	if err != nil {
+		t.Fatalf("load places: %v", err)
+	}
+	if verr := config.Validate(chars, groups, places); verr != nil {
+		t.Fatalf("validate: %v", verr)
+	}
+
+	llmImpl := echoLLM{}
+
+	byID := make(map[api.CharacterID]*character.Character, len(chars))
+	for _, spec := range chars {
+		id := api.CharacterID(spec.ID)
+		byID[id] = &character.Character{
+			ID: id, Name: spec.Name, Persona: spec.Persona,
+			Capabilities: spec.Capabilities, Blurb: spec.Blurb,
+			Memory: memory.NewInMem(50),
+			Inbox:  make(chan character.Perception, 8),
+		}
+	}
+
+	g := groups[0]
+	sc := &scene.Scene{
+		ID:     api.SceneID(g.ID),
+		Router: scene.LLMRouter{Model: llmImpl, PreFilterK: 0, MaxConsult: 0},
+	}
+	for _, mid := range g.Members {
+		sc.Members = append(sc.Members, byID[api.CharacterID(mid)])
+	}
+	sc.Leader = byID[api.CharacterID(g.Leader)]
+
+	w := world.New(world.Config{TickInterval: time.Hour}, st, llmImpl)
+	w.RegisterScene(sc)
+
+	// Pre-register a place (so the world has more than one scene at boot,
+	// matching the production wiring).
+	for _, p := range places {
+		ps := &scene.Scene{
+			ID: api.SceneID("place:" + p.ID), PlaceID: api.PlaceID(p.ID),
+			Router: scene.LLMRouter{Model: llmImpl, PreFilterK: 0, MaxConsult: 0},
+		}
+		for _, nid := range p.NPCs {
+			ps.Members = append(ps.Members, byID[api.CharacterID(nid)])
+		}
+		ps.Leader = ps.Members[0]
+		w.RegisterScene(ps)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	// Drive an IRC `!summon` line through the WorldAPI (the IRC adapter
+	// itself is exercised in internal/irc; this test focuses on the
+	// runtime registration + scene activation path).
+	npcs := []api.CharacterID{"vicar", "booger-bertha"}
+	sceneID, err := w.API().SummonNew(ctx, "spire", npcs, "A drafty steeple.")
+	if err != nil {
+		t.Fatalf("SummonNew: %v", err)
+	}
+	if sceneID != "place:spire" {
+		t.Fatalf("scene id: want place:spire, got %q", sceneID)
+	}
+
+	// Give the orchestrate loop a moment to fan out.
+	time.Sleep(250 * time.Millisecond)
+
+	entries, err := w.API().Log(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("log: %v", err)
+	}
+	var sawSummon, sawInject, sawSpeech, sawSynth bool
+	for _, e := range entries {
+		if e.SceneID == api.SceneID(g.ID) && e.Kind != string(store.KindSceneEnter) {
+			t.Errorf("gang scene saw unexpected event: %+v", e)
+		}
+		if e.SceneID != sceneID {
+			continue
+		}
+		switch e.Kind {
+		case string(store.KindSummon):
+			sawSummon = true
+		case string(store.KindInject):
+			sawInject = true
+		case string(store.KindSpeech):
+			sawSpeech = true
+		case string(store.KindSynthesized):
+			sawSynth = true
+			if e.Actor != string(npcs[0]) {
+				t.Errorf("synthesized actor: want %s, got %s", npcs[0], e.Actor)
+			}
+		}
+	}
+	if !sawSummon {
+		t.Error("no KindSummon on place:spire")
+	}
+	if !sawInject {
+		t.Error("no KindInject on place:spire (description should have fired)")
+	}
+	if !sawSpeech {
+		t.Error("no KindSpeech on place:spire (orchestrate did not fan out)")
+	}
+	if !sawSynth {
+		t.Error("no KindSynthesized on place:spire (leader did not synthesize)")
+	}
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("world.Run did not return after cancel")
+	}
+}
