@@ -3,6 +3,7 @@ package world
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -865,6 +866,168 @@ func TestSummonNewDuplicatePlaceErrors(t *testing.T) {
 		t.Fatal("second SummonNew of same place should error")
 	} else if !strings.Contains(err.Error(), "duplicate scene id") {
 		t.Errorf("want duplicate-scene-id error, got %v", err)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewConcurrentDistinctPlacesSafe(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	const N = 8
+	errs := make(chan error, N)
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			_, err := w.API().SummonNew(ctx, api.PlaceID(fmt.Sprintf("p%d", i)), []api.CharacterID{"leader"}, "")
+			errs <- err
+		}()
+	}
+	for i := 0; i < N; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("call %d: %v", i, err)
+		}
+	}
+
+	// Distinct places + the boot "scene-1" → N+1 scenes.
+	if got, want := len(w.scenes), N+1; got != want {
+		t.Errorf("scene count: want %d, got %d", want, got)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewSamePlaceConcurrentCollision(t *testing.T) {
+	w, _, st := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	const N = 8
+	errs := make(chan error, N)
+	for i := 0; i < N; i++ {
+		go func() {
+			_, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader"}, "")
+			errs <- err
+		}()
+	}
+	var nilCount, dupCount int
+	for i := 0; i < N; i++ {
+		err := <-errs
+		switch {
+		case err == nil:
+			nilCount++
+		case strings.Contains(err.Error(), "duplicate scene id"):
+			dupCount++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if nilCount != 1 {
+		t.Errorf("want exactly 1 successful register, got %d", nilCount)
+	}
+	if dupCount != N-1 {
+		t.Errorf("want %d duplicate errors, got %d", N-1, dupCount)
+	}
+
+	// Exactly one KindSummon for the place.
+	evs, err := st.Query(ctx, store.Filter{SceneID: "place:spire", Kind: store.KindSummon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 1 {
+		t.Errorf("want exactly 1 KindSummon, got %d", len(evs))
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewCtxCancelledBeforeSend(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	runCtx, runCancel := context.WithCancel(context.Background())
+	defer runCancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(runCtx) }()
+
+	// Cancel before the call begins.
+	callCtx, callCancel := context.WithCancel(runCtx)
+	callCancel()
+
+	_, err := w.API().SummonNew(callCtx, "spire", []api.CharacterID{"leader"}, "")
+	if err == nil {
+		t.Fatal("expected ctx error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("want context.Canceled, got %v", err)
+	}
+	if _, dup := w.scenes["place:spire"]; dup {
+		t.Error("scene should not be registered when ctx was cancelled before send")
+	}
+
+	runCancel()
+	<-runDone
+}
+
+func TestSummonNewCtxCancelledRacing(t *testing.T) {
+	// Spec test #8 second variant: cancel from a goroutine racing the call.
+	// Repeat many times under -race to surface interleavings between the
+	// charactersByIDReq send, the RegisterSceneCmd send, and the cancel.
+	for i := 0; i < 50; i++ {
+		w, _, _ := newTestWorld(t)
+		runCtx, runCancel := context.WithCancel(context.Background())
+		runDone := make(chan error, 1)
+		go func() { runDone <- w.Run(runCtx) }()
+
+		callCtx, callCancel := context.WithCancel(runCtx)
+		go func() {
+			// Cancel after a tiny random-ish delay (a busy loop yields).
+			for j := 0; j < i; j++ {
+				_ = j
+			}
+			callCancel()
+		}()
+		_, err := w.API().SummonNew(callCtx, api.PlaceID(fmt.Sprintf("r%d", i)),
+			[]api.CharacterID{"leader"}, "")
+		// Either succeeded (cancel came too late) or returned ctx error.
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("iteration %d: unexpected err %v", i, err)
+		}
+
+		runCancel()
+		<-runDone
+	}
+}
+
+func TestSummonNewKindSummonAppendFailure(t *testing.T) {
+	w, _, st := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	// Close the store mid-flight so the KindSummon append fails.
+	_ = st.Close()
+
+	_, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader"}, "")
+	if err == nil {
+		t.Fatal("expected append failure to surface")
+	}
+
+	// Scene stays registered (documented non-atomic state).
+	if _, ok := w.scenes["place:spire"]; !ok {
+		t.Error("scene should remain registered after summon-append failure")
 	}
 
 	cancel()
