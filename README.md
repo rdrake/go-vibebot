@@ -127,8 +127,12 @@ Gemini key is also configured, Gemini is still used for memory embeddings.
 IRC commands once joined:
 
 - `!inject <description>` — injects a scenario; the group reacts.
+- `!summon <place-id>` — summon a pre-loaded place (`seed/places/*.yaml`).
+- `!summon <place-id> n=<id1>,<id2>,... <description>` — register a new ad-hoc place-scene at runtime using existing characters. The first id is the scene leader. Description is recorded as an inject scoped to the new scene. Ad-hoc places live only for the binary's lifetime.
+- `!nudge <character-id>` — nudge a character to speak.
 - `!log [duration]` — dumps events in the last `duration` (e.g. `15m`,
   `2h`). Default: `1h`.
+- `!snapshot` — dump a summary of current characters and places.
 
 The default DB is `vibebot.db` in the working directory; pass `--db
 :memory:` for ephemeral runs.

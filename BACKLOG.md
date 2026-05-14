@@ -64,7 +64,7 @@ What shipped:
 - `cmd/sim/smoke_test.go::TestSummonCathedralInjectAndSpeak` covers the full path.
 
 Deferred follow-ups (open):
-- **Runtime scene registration** — `World.RegisterScene` panics after `Run` starts. Lifting this requires coordinator-goroutine-owned scene creation so a place can be summoned without being pre-loaded.
+- ~~**Runtime scene registration**~~ — SHIPPED 2026-05-14. Plan at `docs/superpowers/plans/2026-05-14-runtime-scene-registration.md`; spec at `docs/superpowers/specs/2026-05-14-runtime-scene-registration-design.md`. `WorldAPI.SummonNew(placeID, npcs, description)` registers an ad-hoc place-scene at runtime via the existing coordinator goroutine. IRC `!summon <id> n=...` and the MCP `summon` tool both surface it.
 - **Scene idle-out for place-scenes** — place-scene NPC goroutines stay alive for the binary's lifetime. Add an idle timer.
 - **Multiple simultaneous instances of the same place** — one scene per `Place.ID` today; NPC memory rows are keyed by character id so two cathedrals over time share memory. Per-instance scoping needed when this lands.
 - **Ambient tick fan-out** — `handleTick` only emits to the default scene. Place-scenes never receive ambient ticks.
