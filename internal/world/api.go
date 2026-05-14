@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
+	"github.com/afternet/go-vibebot/internal/scene"
 	"github.com/afternet/go-vibebot/internal/store"
 )
 
@@ -32,8 +33,48 @@ func (a apiImpl) Summon(ctx context.Context, placeID api.PlaceID) error {
 	})
 }
 
-func (a apiImpl) SummonNew(_ context.Context, _ api.PlaceID, _ []api.CharacterID, _ string) (api.SceneID, error) {
-	return "", errors.New("world: SummonNew not yet implemented")
+func (a apiImpl) SummonNew(
+	ctx context.Context,
+	placeID api.PlaceID,
+	npcs []api.CharacterID,
+	description string,
+) (api.SceneID, error) {
+	if placeID == "" {
+		return "", errors.New("world: place id required")
+	}
+	if len(npcs) == 0 {
+		return "", errors.New("world: at least one npc required")
+	}
+
+	chars, err := a.w.requestCharactersByID(ctx, npcs)
+	if err != nil {
+		return "", err
+	}
+
+	sceneID := api.SceneID("place:" + string(placeID))
+	sc := &scene.Scene{
+		ID:      sceneID,
+		PlaceID: placeID,
+		Members: chars,
+		Leader:  chars[0],
+		Router: scene.LLMRouter{
+			Model: a.w.model, PreFilterK: 0, MaxConsult: 0,
+		},
+	}
+
+	if err := a.send(ctx, func(r chan<- error) Command {
+		return RegisterSceneCmd{Scene: sc, Reply: r}
+	}); err != nil {
+		return "", err
+	}
+
+	if err := a.Summon(ctx, placeID); err != nil {
+		return sceneID, err
+	}
+	if description == "" {
+		return sceneID, nil
+	}
+	return sceneID, a.InjectEvent(ctx, sceneID, "", description)
 }
 
 func (a apiImpl) Nudge(ctx context.Context, characterID api.CharacterID) error {

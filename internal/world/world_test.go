@@ -722,3 +722,151 @@ func TestRequestCharactersByIDReportsMissing(t *testing.T) {
 	cancel()
 	<-runDone
 }
+
+func TestSummonNewWithoutDescriptionEmitsOnlySummon(t *testing.T) {
+	w, _, st := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	sceneID, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader", "m1"}, "")
+	if err != nil {
+		t.Fatalf("SummonNew: %v", err)
+	}
+	if sceneID != "place:spire" {
+		t.Fatalf("want sceneID place:spire, got %q", sceneID)
+	}
+
+	evs, err := st.Query(ctx, store.Filter{SceneID: sceneID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summonCount, injectCount int
+	for _, e := range evs {
+		switch e.Kind {
+		case store.KindSummon:
+			summonCount++
+		case store.KindInject:
+			injectCount++
+		}
+	}
+	if summonCount != 1 {
+		t.Errorf("want 1 KindSummon, got %d", summonCount)
+	}
+	if injectCount != 0 {
+		t.Errorf("want 0 KindInject, got %d", injectCount)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewWithDescriptionWritesInject(t *testing.T) {
+	w, _, st := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	sceneID, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader", "m1"}, "A drafty steeple.")
+	if err != nil {
+		t.Fatalf("SummonNew: %v", err)
+	}
+
+	evs, err := st.Query(ctx, store.Filter{SceneID: sceneID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summonCount, injectCount int
+	var injectDesc string
+	for _, e := range evs {
+		switch e.Kind {
+		case store.KindSummon:
+			summonCount++
+		case store.KindInject:
+			injectCount++
+			injectDesc = store.TextOf(e)
+		}
+	}
+	if summonCount != 1 || injectCount != 1 {
+		t.Fatalf("want 1 summon + 1 inject, got %d/%d", summonCount, injectCount)
+	}
+	if injectDesc != "A drafty steeple." {
+		t.Errorf("inject text: want %q, got %q", "A drafty steeple.", injectDesc)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewUnknownCharacterErrors(t *testing.T) {
+	// Spec test #2: drives the full SummonNew API path, including the
+	// charactersByIDReq round-trip, not just the locked helper.
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	sceneCountBefore := len(w.scenes)
+	_, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader", "ghost"}, "")
+	if err == nil {
+		t.Fatal("expected unknown-character error")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error should name the missing id, got %v", err)
+	}
+	if got := len(w.scenes); got != sceneCountBefore {
+		t.Errorf("scenes map changed: before=%d after=%d", sceneCountBefore, got)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewRejectsEmptyInputs(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	if _, err := w.API().SummonNew(ctx, "", []api.CharacterID{"leader"}, ""); err == nil {
+		t.Error("expected error for empty place id")
+	}
+	if _, err := w.API().SummonNew(ctx, "spire", nil, ""); err == nil {
+		t.Error("expected error for nil npcs")
+	}
+	if _, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{}, ""); err == nil {
+		t.Error("expected error for empty npcs")
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestSummonNewDuplicatePlaceErrors(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	if _, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader"}, ""); err != nil {
+		t.Fatalf("first SummonNew: %v", err)
+	}
+	if _, err := w.API().SummonNew(ctx, "spire", []api.CharacterID{"leader"}, ""); err == nil {
+		t.Fatal("second SummonNew of same place should error")
+	} else if !strings.Contains(err.Error(), "duplicate scene id") {
+		t.Errorf("want duplicate-scene-id error, got %v", err)
+	}
+
+	cancel()
+	<-runDone
+}
