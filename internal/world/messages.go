@@ -1,6 +1,9 @@
 package world
 
-import "github.com/afternet/go-vibebot/internal/api"
+import (
+	"github.com/afternet/go-vibebot/internal/api"
+	"github.com/afternet/go-vibebot/internal/scene"
+)
 
 // Command is a sealed sum type of every externally-originated request the
 // world coordinator handles. The marker method is unexported so only this
@@ -34,9 +37,19 @@ type Nudge struct {
 	Reply       chan<- error
 }
 
-func (Inject) isCommand() {}
-func (Summon) isCommand() {}
-func (Nudge) isCommand()  {}
+// RegisterSceneCmd registers a fully-constructed scene on the live
+// coordinator. The boot helper World.RegisterScene panics on error; this
+// variant returns the error to the caller so runtime-registered scenes can
+// fail cleanly (duplicate ids, unknown member characters).
+type RegisterSceneCmd struct {
+	Scene *scene.Scene
+	Reply chan<- error
+}
+
+func (Inject) isCommand()          {}
+func (Summon) isCommand()          {}
+func (Nudge) isCommand()           {}
+func (RegisterSceneCmd) isCommand() {}
 
 // GroupAction is an internally-originated action a group/scene wants to
 // take. Reserved for future use; the skeleton produces these only

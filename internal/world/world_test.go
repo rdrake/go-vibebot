@@ -605,3 +605,80 @@ func TestSummonKnownPlaceWritesSummonEventScopedToPlaceScene(t *testing.T) {
 		t.Fatalf("want summon scoped to place:cathedral, got %q", evs[0].SceneID)
 	}
 }
+
+func TestRegisterSceneAfterRunDoesNotPanic(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	// Build a second scene reusing the boot members (already in w.characters).
+	w2 := &scene.Scene{
+		ID:      api.SceneID("ad-hoc-1"),
+		Members: []*character.Character{},
+	}
+	// Pull a registered character out of the boot scene.
+	for _, m := range w.scenes[api.SceneID("scene-1")].Members {
+		w2.Members = append(w2.Members, m)
+		break
+	}
+	w2.Leader = w2.Members[0]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	reply := make(chan error, 1)
+	select {
+	case w.commands <- RegisterSceneCmd{Scene: w2, Reply: reply}:
+	case <-time.After(time.Second):
+		t.Fatal("could not post RegisterSceneCmd")
+	}
+	select {
+	case err := <-reply:
+		if err != nil {
+			t.Fatalf("runtime register: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no reply from coordinator")
+	}
+
+	// Verify the new scene is reachable via the existing Inject command.
+	if err := w.API().InjectEvent(ctx, "ad-hoc-1", "", "hello"); err != nil {
+		t.Fatalf("inject against new scene: %v", err)
+	}
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("world.Run did not return after cancel")
+	}
+}
+
+func TestRegisterSceneLockedRejectsUnknownMember(t *testing.T) {
+	// Direct test of the locked helper. Spec test #2 (which targets the
+	// SummonNew API surface) is implemented in Task 4 once SummonNew exists.
+	w, _, _ := newTestWorld(t)
+	bad := &scene.Scene{
+		ID:      api.SceneID("ghost"),
+		Members: []*character.Character{{ID: "nobody", Inbox: make(chan character.Perception, 1)}},
+	}
+	bad.Leader = bad.Members[0]
+	if err := w.registerSceneLocked(bad); err == nil {
+		t.Fatal("expected unknown-character error")
+	}
+	if _, dup := w.scenes["ghost"]; dup {
+		t.Fatal("scene must not be registered when validation fails")
+	}
+}
+
+func TestRegisterSceneLockedDuplicateRejected(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+	dup := &scene.Scene{
+		ID:      api.SceneID("scene-1"),
+		Members: w.scenes["scene-1"].Members,
+		Leader:  w.scenes["scene-1"].Leader,
+	}
+	if err := w.registerSceneLocked(dup); err == nil {
+		t.Fatal("expected duplicate-scene-id error")
+	}
+}

@@ -77,21 +77,59 @@ func New(cfg Config, st store.EventStore, model llm.LLM) *World {
 	}
 }
 
-// RegisterScene records a scene and its members. It must be called before
-// Run; calling it after Run starts panics — silent corruption is worse.
+// RegisterScene records a scene and its members. Must be called before
+// Run. Panics on error — boot-time misconfiguration should fail loudly.
+// For runtime registration, send RegisterSceneCmd on World.Commands().
+//
+// Boot semantics preserved: members of registered scenes are inserted
+// into w.characters here, before registerSceneLocked validates that all
+// members already exist. This keeps cmd/sim/main.go's existing wiring
+// (which calls RegisterScene with fresh *character.Character values that
+// have not yet been seen by World) working unchanged. The runtime path
+// (RegisterSceneCmd from the coordinator) does NOT populate characters
+// — it relies on this boot pre-population.
 func (w *World) RegisterScene(s *scene.Scene) {
 	if w.running.Load() {
-		panic("world: RegisterScene called after Run")
+		panic("world: RegisterScene called after Run — use WorldAPI.SummonNew")
+	}
+	// Pre-populate the character map so registerSceneLocked's existence
+	// check passes for boot-time scenes whose members are fresh values.
+	for _, m := range s.Members {
+		if m == nil {
+			continue
+		}
+		w.characters[m.ID] = m
+	}
+	if err := w.registerSceneLocked(s); err != nil {
+		panic("world: " + err.Error())
+	}
+}
+
+// registerSceneLocked is the single mutation point for w.scenes,
+// w.sceneOrder, and w.charScene. It is read-only against w.characters —
+// members must already be registered. Only the coordinator goroutine
+// (or the pre-Run boot helper, which pre-populates w.characters above)
+// may invoke it.
+func (w *World) registerSceneLocked(s *scene.Scene) error {
+	if s == nil || s.ID == "" {
+		return errors.New("world: scene must have an id")
 	}
 	if _, dup := w.scenes[s.ID]; dup {
-		panic(fmt.Sprintf("world: duplicate scene id %q", s.ID))
+		return fmt.Errorf("world: duplicate scene id %q", s.ID)
+	}
+	for _, m := range s.Members {
+		if _, ok := w.characters[m.ID]; !ok {
+			return fmt.Errorf("world: scene %q references unknown character %q", s.ID, m.ID)
+		}
 	}
 	w.scenes[s.ID] = s
 	w.sceneOrder = append(w.sceneOrder, s.ID)
 	for _, m := range s.Members {
-		w.characters[m.ID] = m
-		w.charScene[m.ID] = s.ID
+		if _, has := w.charScene[m.ID]; !has {
+			w.charScene[m.ID] = s.ID
+		}
 	}
+	return nil
 }
 
 // Commands is the channel adapters write to. Callers never close it.
@@ -158,9 +196,12 @@ func (w *World) handleCommand(ctx context.Context, cmd Command) {
 		c.Reply <- w.dispatchSummon(ctx, c.PlaceID)
 	case Nudge:
 		c.Reply <- w.dispatchNudge(ctx, c.CharacterID)
+	case RegisterSceneCmd:
+		c.Reply <- w.registerSceneLocked(c.Scene)
 	default:
-		// Unreachable: Command is sealed and every variant is handled above.
-		// Panicking forces failures here instead of silently swallowing.
+		// Unreachable: Command is sealed and every variant is handled above
+		// (Inject, Summon, Nudge, RegisterSceneCmd). Panicking forces failures
+		// here instead of silently swallowing.
 		panic(fmt.Sprintf("world: unhandled command %T", cmd))
 	}
 }
