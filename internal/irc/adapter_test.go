@@ -74,6 +74,49 @@ func TestCmdLogCanIncludeAmbient(t *testing.T) {
 	}
 }
 
+func TestCmdSummonNewRoutesToSummonNew(t *testing.T) {
+	fw := &fakeWorld{SummonNewScene: "place:spire"}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var replies []string
+	a.cmdSummon(context.Background(), "spire n=vicar,booger-bertha A drafty steeple.", func(s string) {
+		replies = append(replies, s)
+	})
+
+	if len(fw.SummonNewCalls) != 1 {
+		t.Fatalf("want 1 SummonNew call, got %d", len(fw.SummonNewCalls))
+	}
+	got := fw.SummonNewCalls[0]
+	if got.PlaceID != "spire" || len(got.NPCs) != 2 || got.NPCs[0] != "vicar" || got.NPCs[1] != "booger-bertha" {
+		t.Errorf("unexpected SummonNew args: %+v", got)
+	}
+	if got.Description != "A drafty steeple." {
+		t.Errorf("description: want %q, got %q", "A drafty steeple.", got.Description)
+	}
+	if len(replies) != 1 || !strings.Contains(replies[0], "place:spire") {
+		t.Errorf("reply should contain scene id, got %v", replies)
+	}
+}
+
+func TestCmdSummonLegacyStillRoutesToSummon(t *testing.T) {
+	fw := &fakeWorld{}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.cmdSummon(context.Background(), "cathedral", func(string) {})
+
+	if len(fw.SummonCalls) != 1 || fw.SummonCalls[0].PlaceID != "cathedral" {
+		t.Errorf("legacy path should call Summon(cathedral); got %+v", fw.SummonCalls)
+	}
+	if len(fw.SummonNewCalls) != 0 {
+		t.Errorf("legacy path must not call SummonNew, got %d", len(fw.SummonNewCalls))
+	}
+}
+
 func TestCmdSnapshotSummarizesCharactersAndPlaces(t *testing.T) {
 	fw := &fakeWorld{
 		CharactersReturn: []api.CharacterRef{

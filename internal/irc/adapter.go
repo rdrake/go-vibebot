@@ -324,6 +324,74 @@ func parseInjectArgs(args string) (api.SceneID, string, bool) {
 	return api.SceneID(sceneID), desc, true
 }
 
+// parseSummonArgs parses the !summon argument string.
+//
+//   !summon <place-id>                                  → legacy form
+//   !summon <place-id> n=<id1>,<id2>,... [description]  → ad-hoc form
+//
+// The n= flag must be the SECOND whitespace-delimited token. Any other
+// position is rejected so a user does not accidentally bury an npc list
+// inside a free-form description. Empty npc entries and empty n= lists
+// are both errors. Legacy form with trailing text is rejected to avoid
+// silently discarding what looked like a scene description.
+func parseSummonArgs(args string) (api.PlaceID, []api.CharacterID, string, error) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return "", nil, "", errors.New("place id required")
+	}
+	first, rest, _ := strings.Cut(args, " ")
+	placeID := api.PlaceID(strings.TrimSpace(first))
+	if placeID == "" {
+		return "", nil, "", errors.New("place id required")
+	}
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return placeID, nil, "", nil
+	}
+
+	second, tail, _ := strings.Cut(rest, " ")
+	if !strings.HasPrefix(second, "n=") {
+		// Legacy form with trailing text is a hard error.
+		if pos := tokenPositionWithPrefix(rest, "n="); pos >= 0 {
+			return "", nil, "", fmt.Errorf("n= must be the second token; got it at position %d", pos+2)
+		}
+		return "", nil, "", errors.New("description without n=...; use !summon <id> n=<id1>,<id2>,... <description> to create a new scene")
+	}
+	npcList := strings.TrimPrefix(second, "n=")
+	if npcList == "" {
+		return "", nil, "", errors.New("n= requires at least one character id")
+	}
+	parts := strings.Split(npcList, ",")
+	npcs := make([]api.CharacterID, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return "", nil, "", errors.New("empty npc id in n= list")
+		}
+		npcs = append(npcs, api.CharacterID(p))
+	}
+	desc := strings.TrimSpace(tail)
+	if strings.Contains(desc, "n=") {
+		// Catch a second n= in the description text.
+		return "", nil, "", errors.New("multiple n= tokens not supported")
+	}
+	return placeID, npcs, desc, nil
+}
+
+// tokenPositionWithPrefix returns the 1-based index of the first
+// whitespace-delimited token in s that starts with prefix, or -1 if
+// none. The caller adds 1 if the place id was already consumed.
+func tokenPositionWithPrefix(s, prefix string) int {
+	idx := 0
+	for _, tok := range strings.Fields(s) {
+		if strings.HasPrefix(tok, prefix) {
+			return idx
+		}
+		idx++
+	}
+	return -1
+}
+
 func (a *Adapter) cmdInject(ctx context.Context, args string, reply func(string)) {
 	sceneID, desc, ok := parseInjectArgs(args)
 	if !ok {
@@ -416,14 +484,28 @@ func (a *Adapter) cmdNudge(ctx context.Context, args string, reply func(string))
 
 func (a *Adapter) cmdSummon(ctx context.Context, args string, reply func(string)) {
 	if args == "" {
-		reply("usage: !summon <place-id>")
+		reply("usage: !summon <place-id> [n=id1,id2,...] [description...]")
 		return
 	}
-	if err := a.api.Summon(ctx, api.PlaceID(args)); err != nil {
+	placeID, npcs, desc, err := parseSummonArgs(args)
+	if err != nil {
+		reply("summon: " + err.Error())
+		return
+	}
+	if len(npcs) == 0 {
+		if err := a.api.Summon(ctx, placeID); err != nil {
+			reply("summon failed: " + err.Error())
+			return
+		}
+		reply("summoned.")
+		return
+	}
+	sceneID, err := a.api.SummonNew(ctx, placeID, npcs, desc)
+	if err != nil {
 		reply("summon failed: " + err.Error())
 		return
 	}
-	reply("summoned.")
+	reply("summoned " + string(sceneID) + ".")
 }
 
 func (a *Adapter) cmdSnapshot(ctx context.Context, reply func(string)) {
