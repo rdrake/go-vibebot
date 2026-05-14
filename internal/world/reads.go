@@ -2,9 +2,12 @@ package world
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/afternet/go-vibebot/internal/api"
+	"github.com/afternet/go-vibebot/internal/character"
 )
 
 type whereReq struct {
@@ -149,4 +152,50 @@ func (w *World) lookupPlaces() []api.PlaceRef {
 		out = append(out, ref)
 	}
 	return out
+}
+
+type charactersByIDReq struct {
+	ids   []api.CharacterID
+	reply chan charactersByIDResp
+}
+
+type charactersByIDResp struct {
+	chars []*character.Character
+	err   error
+}
+
+func (w *World) lookupCharactersByID(ids []api.CharacterID) charactersByIDResp {
+	out := make([]*character.Character, 0, len(ids))
+	var missing []string
+	for _, id := range ids {
+		c, ok := w.characters[id]
+		if !ok {
+			missing = append(missing, string(id))
+			continue
+		}
+		out = append(out, c)
+	}
+	if len(missing) > 0 {
+		return charactersByIDResp{
+			err: fmt.Errorf("unknown character(s): %s", strings.Join(missing, ", ")),
+		}
+	}
+	return charactersByIDResp{chars: out}
+}
+
+// requestCharactersByID posts to the coordinator and awaits the reply.
+// Mirrors the where/who helpers.
+func (w *World) requestCharactersByID(ctx context.Context, ids []api.CharacterID) ([]*character.Character, error) {
+	reply := make(chan charactersByIDResp, 1)
+	select {
+	case w.charactersByIDReq <- charactersByIDReq{ids: ids, reply: reply}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case resp := <-reply:
+		return resp.chars, resp.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

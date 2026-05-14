@@ -39,6 +39,7 @@ type World struct {
 	whoReq        chan whoReq
 	charactersReq chan charactersReq
 	placesReq     chan placesReq
+	charactersByIDReq chan charactersByIDReq
 
 	// owned by coordinator goroutine after Run starts
 	scenes     map[api.SceneID]*scene.Scene
@@ -71,6 +72,7 @@ func New(cfg Config, st store.EventStore, model llm.LLM) *World {
 		whoReq:        make(chan whoReq),
 		charactersReq: make(chan charactersReq),
 		placesReq:     make(chan placesReq),
+		charactersByIDReq: make(chan charactersByIDReq),
 		scenes:       make(map[api.SceneID]*scene.Scene),
 		characters:   make(map[api.CharacterID]*character.Character),
 		charScene:    make(map[api.CharacterID]api.SceneID),
@@ -184,6 +186,8 @@ func (w *World) Run(ctx context.Context) error {
 			req.reply <- w.lookupCharacters()
 		case req := <-w.placesReq:
 			req.reply <- w.lookupPlaces()
+		case req := <-w.charactersByIDReq:
+			req.reply <- w.lookupCharactersByID(req.ids)
 		}
 	}
 }

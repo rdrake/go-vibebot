@@ -682,3 +682,43 @@ func TestRegisterSceneLockedDuplicateRejected(t *testing.T) {
 		t.Fatal("expected duplicate-scene-id error")
 	}
 }
+
+func TestRequestCharactersByIDResolvesExisting(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	chars, err := w.requestCharactersByID(ctx, []api.CharacterID{"leader", "m1"})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if len(chars) != 2 || chars[0].ID != "leader" || chars[1].ID != "m1" {
+		t.Fatalf("unexpected chars: %+v", chars)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestRequestCharactersByIDReportsMissing(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	_, err := w.requestCharactersByID(ctx, []api.CharacterID{"leader", "ghost", "wisp"})
+	if err == nil {
+		t.Fatal("expected error for missing characters")
+	}
+	if !strings.Contains(err.Error(), "ghost") || !strings.Contains(err.Error(), "wisp") {
+		t.Fatalf("error should name missing ids, got: %v", err)
+	}
+
+	cancel()
+	<-runDone
+}
