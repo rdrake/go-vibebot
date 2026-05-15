@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
@@ -27,14 +28,16 @@ const (
 // Embedded scores Retrieve results by cosine similarity to a query
 // embedding plus an exponential recency bonus. It embeds each recorded
 // event up front; Retrieve does one embedding for the query, then a cheap
-// in-memory rank. Not safe for concurrent use; the owning character
-// goroutine is the sole accessor.
+// in-memory rank. Safe for concurrent use: the owning character goroutine
+// writes (via Record) while the world goroutine reads during leader
+// synthesis (via Retrieve / Summary).
 type Embedded struct {
-	model   llm.LLM
-	cap     int
-	lambda  float64
-	tau     time.Duration
-	now     func() time.Time // injectable for tests
+	model  llm.LLM
+	cap    int
+	lambda float64
+	tau    time.Duration
+	now    func() time.Time // injectable for tests
+	mu     sync.RWMutex     // guards entries; persister calls happen outside the lock
 	entries []memoryEntry
 	// Persistence (optional; nil when WithPersister was not used).
 	persister VectorStore
@@ -98,10 +101,12 @@ func (m *Embedded) Record(ctx context.Context, ev store.Event) error {
 		}
 	}
 
+	m.mu.Lock()
 	m.entries = append(m.entries, entry)
 	if m.cap > 0 && len(m.entries) > m.cap {
 		m.entries = m.entries[len(m.entries)-m.cap:]
 	}
+	m.mu.Unlock()
 
 	var saveErr error
 	if m.persister != nil && len(entry.embedding) > 0 {
@@ -130,27 +135,28 @@ func (m *Embedded) Retrieve(ctx context.Context, query string, k int) ([]store.E
 	if k <= 0 {
 		return nil, nil
 	}
-	if len(m.entries) == 0 {
+	snap := m.snapshot()
+	if len(snap) == 0 {
 		return nil, nil
 	}
-	if strings.TrimSpace(query) == "" || !m.hasEmbeddings() {
-		return m.recencyTail(k), nil
+	if strings.TrimSpace(query) == "" || !entriesHaveEmbeddings(snap) {
+		return recencyTailOf(snap, k), nil
 	}
 
 	qvec, err := m.model.EmbedText(ctx, query)
 	if err != nil {
 		slog.Default().Warn("memory retrieve embed failed; falling back to recency",
 			"err", err)
-		return m.recencyTail(k), nil
+		return recencyTailOf(snap, k), nil
 	}
 
 	type ranked struct {
 		idx   int
 		score float64
 	}
-	scored := make([]ranked, 0, len(m.entries))
+	scored := make([]ranked, 0, len(snap))
 	now := m.now()
-	for i, e := range m.entries {
+	for i, e := range snap {
 		if len(e.embedding) == 0 {
 			continue
 		}
@@ -159,7 +165,7 @@ func (m *Embedded) Retrieve(ctx context.Context, query string, k int) ([]store.E
 		scored = append(scored, ranked{idx: i, score: sim + m.lambda*recency})
 	}
 	if len(scored) == 0 {
-		return m.recencyTail(k), nil
+		return recencyTailOf(snap, k), nil
 	}
 	sort.SliceStable(scored, func(i, j int) bool {
 		return scored[i].score > scored[j].score
@@ -169,22 +175,37 @@ func (m *Embedded) Retrieve(ctx context.Context, query string, k int) ([]store.E
 	}
 	out := make([]store.Event, k)
 	for i := 0; i < k; i++ {
-		out[i] = m.entries[scored[i].idx].event
+		out[i] = snap[scored[i].idx].event
 	}
 	return out, nil
 }
 
+// snapshot returns a shallow copy of entries safe to iterate without the
+// lock. Embedding backing arrays are immutable post-Record, so sharing
+// them across goroutines is safe.
+func (m *Embedded) snapshot() []memoryEntry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.entries) == 0 {
+		return nil
+	}
+	out := make([]memoryEntry, len(m.entries))
+	copy(out, m.entries)
+	return out
+}
+
 // Summary renders all recorded events as a flat newline-joined list.
 func (m *Embedded) Summary() string {
+	snap := m.snapshot()
 	var b strings.Builder
-	for _, e := range m.entries {
+	for _, e := range snap {
 		fmt.Fprintf(&b, "- %s/%s: %s\n", e.event.Actor, e.event.Kind, store.TextOf(e.event))
 	}
 	return b.String()
 }
 
-func (m *Embedded) hasEmbeddings() bool {
-	for _, e := range m.entries {
+func entriesHaveEmbeddings(entries []memoryEntry) bool {
+	for _, e := range entries {
 		if len(e.embedding) > 0 {
 			return true
 		}
@@ -192,12 +213,12 @@ func (m *Embedded) hasEmbeddings() bool {
 	return false
 }
 
-func (m *Embedded) recencyTail(k int) []store.Event {
-	if k > len(m.entries) {
-		k = len(m.entries)
+func recencyTailOf(entries []memoryEntry, k int) []store.Event {
+	if k > len(entries) {
+		k = len(entries)
 	}
 	out := make([]store.Event, k)
-	for i, e := range m.entries[len(m.entries)-k:] {
+	for i, e := range entries[len(entries)-k:] {
 		out[i] = e.event
 	}
 	return out
@@ -229,7 +250,9 @@ func (m *Embedded) Hydrate(ctx context.Context, events EventLookup) error {
 		return fmt.Errorf("hydrate load: %w", err)
 	}
 	if len(rows) == 0 {
+		m.mu.Lock()
 		m.entries = nil
+		m.mu.Unlock()
 		return nil
 	}
 	ids := make([]store.EventID, len(rows))
@@ -260,7 +283,9 @@ func (m *Embedded) Hydrate(ctx context.Context, events EventLookup) error {
 			recorded:  r.Recorded,
 		})
 	}
+	m.mu.Lock()
 	m.entries = entries
+	m.mu.Unlock()
 	return nil
 }
 
