@@ -1570,6 +1570,9 @@ End-to-end IRC → world → event log test, mirroring `TestSummonCathedralInjec
 
 **Files:**
 - Modify: `cmd/sim/smoke_test.go`
+- Modify (deviation, see below): `seed/places/eton-on-thames.yaml`
+
+> **Execution deviation (2026-05-14):** the verbatim test code below calls `SummonNew(ctx, "spire", []api.CharacterID{"vicar", "booger-bertha"}, ...)`. `booger-bertha` was only a member of `groups[1]` (the-gang) at plan-authoring time, and this test only boot-registers `groups[0]` (stinky-lads) plus the four `seed/places/*.yaml` scenes — none of which contained her. Result: `SummonNew` returned `unknown character(s): booger-bertha`. Resolved during execution by adding `booger-bertha` to `seed/places/eton-on-thames.yaml` (commit `0cd1a4c`), which is the minimum boot-data change to make the plan-exact test pass. Alternative would have been to swap the test's NPC list — also a plan deviation. Flagged here so a future reader sees both the original intent and the actual landing.
 
 - [ ] **Step 9.1: Write the failing test**
 
@@ -1737,6 +1740,8 @@ git commit -m "sim: smoke test for runtime ad-hoc place summon"
 - Modify: `README.md`
 - Modify: `BACKLOG.md`
 
+> **Execution deviation (2026-05-14):** Step 10.1 below says "replace the `!summon` line" in the README's IRC commands section, assuming entries existed for `!summon`, `!nudge`, and `!snapshot`. At execution time the section only contained `!inject` and `!log` — earlier work had shipped the other three commands without README updates. Resolved (commit `7f021e2`) by expanding the section to include accurate one-line entries for the missing commands alongside the verbatim two-line `!summon` block from this plan. The plan-quoted text was preserved exactly; only the surrounding context was filled in.
+
 - [ ] **Step 10.1: Update README IRC commands section**
 
 Find the IRC commands list in `README.md` (it lists `!inject`, `!summon`, `!nudge`, `!log`, `!snapshot`). Replace the `!summon` line with:
@@ -1828,3 +1833,16 @@ Spec test → plan location mapping:
 To run a single sub-test from the consolidated parser table: `go test ./internal/irc/ -run 'TestParseSummonArgs/adhoc_full' -v` (Go converts the table-name's spaces to underscores).
 
 If any row is missing or its location is wrong, return to that task and add the test before considering this plan complete.
+
+---
+
+## Post-execution log (2026-05-14)
+
+The plan was executed task-by-task via subagent-driven development on 2026-05-14. Commits `bb5d722..7f021e2` on `main` correspond to Tasks 1 through 10. Two intentional deviations from the plan-as-authored landed during execution; both are flagged inline at their respective tasks and summarized here for quick reference.
+
+| Deviation | Location | Commit | Reason |
+|---|---|---|---|
+| Added `booger-bertha` to `seed/places/eton-on-thames.yaml` | Task 9 (plan listed only `cmd/sim/smoke_test.go` as modified) | `0cd1a4c` | Plan-exact test code referenced an NPC that wasn't boot-registered. Minimum seed-data fix preserves the plan's test code verbatim. |
+| Expanded README IRC commands section instead of doing a single-line replace | Task 10 | `7f021e2` | The pre-existing section was already out of date — only `!inject` and `!log` were listed. The plan-quoted `!summon` two-line block landed verbatim; the other commands' one-liners were added accurately. |
+
+Additionally, a follow-up commit `cee5140` ("memory: guard InMem and Embedded for concurrent Record/Retrieve") fixed a pre-existing data race in `internal/memory.(*InMem)` and `internal/memory.(*Embedded)` that this plan inherited from commit `76ee691` ("scene: leader synthesis pulls from leader's own memory"). The race was out of scope for this plan but had to be fixed before `go test -race ./...` could pass cleanly — which Step 11.1 of the post-flight checklist required.
