@@ -199,6 +199,8 @@ func (a *Adapter) handleMessage(ctx context.Context, c *girc.Client, e girc.Even
 		a.cmdInject(ctx, cmd.Args, reply)
 	case "log":
 		a.cmdLog(ctx, cmd.Args, reply)
+	case "recap":
+		a.cmdRecap(ctx, cmd.Args, reply)
 	case "nudge":
 		a.cmdNudge(ctx, cmd.Args, reply)
 	case "summon":
@@ -426,6 +428,39 @@ func (a *Adapter) cmdLog(ctx context.Context, args string, reply func(string)) {
 		lines = append(lines, formatLogEntry(ent))
 	}
 	reply(strings.Join(lines, "\n"))
+}
+
+func (a *Adapter) cmdRecap(ctx context.Context, args string, reply func(string)) {
+	characterID, since, err := parseRecapArgs(args)
+	if err != nil {
+		reply("recap: " + err.Error())
+		return
+	}
+	text, err := a.api.Recap(ctx, characterID, since)
+	if err != nil {
+		reply("recap failed: " + err.Error())
+		return
+	}
+	reply(text)
+}
+
+// parseRecapArgs accepts any of: "" | "<duration>" | "<character>" |
+// "<character> <duration>" | "<duration> <character>". Order is
+// indifferent because durations and ids never overlap as strings.
+func parseRecapArgs(args string) (api.CharacterID, time.Duration, error) {
+	dur := time.Hour
+	var charID api.CharacterID
+	for _, tok := range strings.Fields(args) {
+		if d, err := time.ParseDuration(tok); err == nil {
+			dur = d
+			continue
+		}
+		if charID != "" {
+			return "", 0, fmt.Errorf("unexpected token %q after character %q", tok, charID)
+		}
+		charID = api.CharacterID(tok)
+	}
+	return charID, dur, nil
 }
 
 func parseLogArgs(args string) (time.Duration, bool) {

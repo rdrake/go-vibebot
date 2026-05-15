@@ -72,6 +72,13 @@ type WorldAPI interface {
 	// the scene id returned by SummonNew.
 	Where(ctx context.Context, characterID CharacterID) (SceneSnapshot, error)
 	Log(ctx context.Context, since time.Duration) ([]LogEntry, error)
+	// Recap returns an LLM-rendered short narrative summary of recent
+	// events. characterID == "" yields an omniscient-narrator paragraph
+	// over the world's event log in the window. A non-empty characterID
+	// yields a recap written in that character's voice, sourced from the
+	// character's own memory rather than the global event log.
+	// since <= 0 defaults to one hour.
+	Recap(ctx context.Context, characterID CharacterID, since time.Duration) (string, error)
 	Who(ctx context.Context, sceneID SceneID) ([]CharacterRef, error)
 	Describe(ctx context.Context, id string) (string, error)
 	Characters(ctx context.Context) ([]CharacterRef, error)

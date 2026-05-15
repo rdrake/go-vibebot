@@ -158,3 +158,87 @@ func TestCmdSnapshotSummarizesCharactersAndPlaces(t *testing.T) {
 		}
 	}
 }
+
+func TestCmdRecapNarratorMode(t *testing.T) {
+	fw := &fakeWorld{RecapReturn: "The cathedral creaks; chaos brews."}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var replies []string
+	a.cmdRecap(context.Background(), "30m", func(s string) { replies = append(replies, s) })
+
+	if len(fw.RecapCalls) != 1 {
+		t.Fatalf("want 1 Recap call, got %d", len(fw.RecapCalls))
+	}
+	got := fw.RecapCalls[0]
+	if got.CharacterID != "" {
+		t.Errorf("narrator mode should pass empty characterID, got %q", got.CharacterID)
+	}
+	if got.Since != 30*time.Minute {
+		t.Errorf("duration: want 30m, got %v", got.Since)
+	}
+	if len(replies) != 1 || replies[0] != "The cathedral creaks; chaos brews." {
+		t.Errorf("unexpected replies: %v", replies)
+	}
+}
+
+func TestCmdRecapCharacterMode(t *testing.T) {
+	fw := &fakeWorld{RecapReturn: "Oi, what a day."}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.cmdRecap(context.Background(), "booger-bertha 15m", func(string) {})
+
+	if len(fw.RecapCalls) != 1 {
+		t.Fatalf("want 1 Recap call, got %d", len(fw.RecapCalls))
+	}
+	got := fw.RecapCalls[0]
+	if got.CharacterID != "booger-bertha" {
+		t.Errorf("characterID: want booger-bertha, got %q", got.CharacterID)
+	}
+	if got.Since != 15*time.Minute {
+		t.Errorf("duration: want 15m, got %v", got.Since)
+	}
+}
+
+func TestCmdRecapDefaultsToOneHour(t *testing.T) {
+	fw := &fakeWorld{RecapReturn: "..."}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.cmdRecap(context.Background(), "", func(string) {})
+
+	if len(fw.RecapCalls) != 1 {
+		t.Fatalf("want 1 Recap call, got %d", len(fw.RecapCalls))
+	}
+	if fw.RecapCalls[0].Since != time.Hour {
+		t.Errorf("default duration: want 1h, got %v", fw.RecapCalls[0].Since)
+	}
+	if fw.RecapCalls[0].CharacterID != "" {
+		t.Errorf("no-args should be narrator mode, got characterID %q", fw.RecapCalls[0].CharacterID)
+	}
+}
+
+func TestCmdRecapRejectsTwoCharacterTokens(t *testing.T) {
+	fw := &fakeWorld{}
+	a, err := New(Config{Server: "irc.example", Channel: "#c", Nick: "bot"}, fw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var replies []string
+	a.cmdRecap(context.Background(), "vicar bertha", func(s string) { replies = append(replies, s) })
+
+	if len(fw.RecapCalls) != 0 {
+		t.Errorf("Recap should not be called on parse error, got %d", len(fw.RecapCalls))
+	}
+	if len(replies) != 1 || !strings.HasPrefix(replies[0], "recap: ") {
+		t.Errorf("expected error reply prefixed 'recap: ', got %v", replies)
+	}
+}

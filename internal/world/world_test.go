@@ -1088,3 +1088,122 @@ func TestNudgeAfterSummonNewTargetsBootScene(t *testing.T) {
 	cancel()
 	<-runDone
 }
+
+func TestRecapNarratorCallsLLMWithRecentEvents(t *testing.T) {
+	w, ll, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	if err := w.API().InjectEvent(ctx, "scene-1", "", "the room shakes."); err != nil {
+		t.Fatalf("inject: %v", err)
+	}
+
+	got, err := w.API().Recap(ctx, "", time.Hour)
+	if err != nil {
+		t.Fatalf("Recap: %v", err)
+	}
+	if !strings.HasPrefix(got, "REPLY[") {
+		t.Errorf("expected mockLLM REPLY prefix, got %q", got)
+	}
+	if !strings.Contains(got, "the room shakes.") {
+		t.Errorf("recap should include the injected event text; got %q", got)
+	}
+	if ll.calls.Load() == 0 {
+		t.Error("Recap should have called the LLM")
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestRecapNarratorEmptyWindow(t *testing.T) {
+	w, ll, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	got, err := w.API().Recap(ctx, "", time.Nanosecond)
+	if err != nil {
+		t.Fatalf("Recap: %v", err)
+	}
+	if got != "(no events in window)" {
+		t.Errorf("want empty-window sentinel, got %q", got)
+	}
+	if ll.calls.Load() != 0 {
+		t.Error("LLM should not be called for empty window")
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestRecapCharacterUsesCharacterPersona(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	leader := w.scenes["scene-1"].Leader
+	_ = leader.Memory.Record(ctx, store.Event{Actor: "leader", Kind: "speech"})
+
+	got, err := w.API().Recap(ctx, "leader", time.Hour)
+	if err != nil {
+		t.Fatalf("Recap: %v", err)
+	}
+	if !strings.HasPrefix(got, "REPLY[") {
+		t.Errorf("expected mockLLM REPLY prefix, got %q", got)
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestRecapCharacterWithNoMemoriesReturnsSentinel(t *testing.T) {
+	w, ll, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	got, err := w.API().Recap(ctx, "leader", time.Hour)
+	if err != nil {
+		t.Fatalf("Recap: %v", err)
+	}
+	if !strings.Contains(got, "no memories yet") {
+		t.Errorf("want no-memories sentinel, got %q", got)
+	}
+	if ll.calls.Load() != 0 {
+		t.Error("LLM should not be called when character has no memories")
+	}
+
+	cancel()
+	<-runDone
+}
+
+func TestRecapCharacterUnknownIDErrors(t *testing.T) {
+	w, _, _ := newTestWorld(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	_, err := w.API().Recap(ctx, "ghost", time.Hour)
+	if err == nil {
+		t.Fatal("expected error for unknown character")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error should name the unknown id, got %v", err)
+	}
+
+	cancel()
+	<-runDone
+}

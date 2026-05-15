@@ -17,6 +17,11 @@ type SummonNewCall struct {
 	Description string
 }
 
+type RecapCall struct {
+	CharacterID api.CharacterID
+	Since       time.Duration
+}
+
 type fakeWorld struct {
 	mu sync.Mutex
 
@@ -33,6 +38,10 @@ type fakeWorld struct {
 	SummonNewErr   error
 	SummonNewScene api.SceneID
 	SummonNewCalls []SummonNewCall
+
+	RecapReturn string
+	RecapErr    error
+	RecapCalls  []RecapCall
 
 	LogCalls []time.Duration
 }
@@ -71,6 +80,13 @@ func (f *fakeWorld) Log(_ context.Context, since time.Duration) ([]api.LogEntry,
 	defer f.mu.Unlock()
 	f.LogCalls = append(f.LogCalls, since)
 	return f.LogReturn, f.LogErr
+}
+
+func (f *fakeWorld) Recap(_ context.Context, characterID api.CharacterID, since time.Duration) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.RecapCalls = append(f.RecapCalls, RecapCall{characterID, since})
+	return f.RecapReturn, f.RecapErr
 }
 
 func (f *fakeWorld) Characters(context.Context) ([]api.CharacterRef, error) {

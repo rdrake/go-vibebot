@@ -32,11 +32,20 @@ type fakeWorld struct {
 	SummonNewScene api.SceneID
 	SummonNewCalls []SummonNewCall
 
+	RecapReturn string
+	RecapErr    error
+	RecapCalls  []RecapCall
+
 	// Recorded calls.
 	InjectCalls []InjectCall
 	SummonCalls []SummonCall
 	NudgeCalls  []NudgeCall
 	LogCalls    []LogCall
+}
+
+type RecapCall struct {
+	CharacterID api.CharacterID
+	Since       time.Duration
 }
 
 type InjectCall struct {
@@ -103,6 +112,13 @@ func (f *fakeWorld) Who(_ context.Context, _ api.SceneID) ([]api.CharacterRef, e
 
 func (f *fakeWorld) Describe(_ context.Context, _ string) (string, error) {
 	return "", errors.New("not implemented in fake")
+}
+
+func (f *fakeWorld) Recap(_ context.Context, characterID api.CharacterID, since time.Duration) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.RecapCalls = append(f.RecapCalls, RecapCall{characterID, since})
+	return f.RecapReturn, f.RecapErr
 }
 
 func (f *fakeWorld) Characters(_ context.Context) ([]api.CharacterRef, error) {

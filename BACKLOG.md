@@ -98,9 +98,9 @@ Deferred follow-ups (open):
 
 `synthesize` now calls `recallForSynth`, which pulls up to `synthRecallK=3` similar past events from the leader's memory and prepends them as a `"Group's recent history:"` block. The current event ID is filtered out (same pattern as `character.recallContext`). Retrieval failures log-and-continue. Coverage in `internal/scene/leader_test.go`. Drop `synthRecallK` to 2 if MaxTokens (120) starts truncating synthesized output.
 
-### S2. `!recap [character]` command
+### ~~S2. `!recap [character]` command~~ — SHIPPED 2026-05-14
 
-In-character narrative summary over recent events. Without a character arg, the bot speaks as a narrator over the scene's events. With an arg (e.g. `!recap stinky-sam`), it speaks as that character recapping from their POV using their `Memory.Summary()` plus retrieval. Implementation: another `cmdRecap` in `internal/irc/adapter.go` that calls a new `WorldAPI.Recap(ctx, characterID, dur)` → returns a string already rendered by the LLM. Smaller than it sounds because the plumbing is identical to `!log`.
+`WorldAPI.Recap(ctx, characterID, since)` returns an LLM-rendered narrative summary. IRC `!recap [character] [duration]` calls it; narrator mode (no character) uses the global event log, character mode uses `Memory.Summary()`. No MCP tool yet; could land separately as a `recap` tool wrapping the same WorldAPI method.
 
 ### S3. Rolling per-character summaries every N events
 

@@ -132,6 +132,10 @@ IRC commands once joined:
 - `!nudge <character-id>` — nudge a character to speak.
 - `!log [duration]` — dumps events in the last `duration` (e.g. `15m`,
   `2h`). Default: `1h`.
+- `!recap [character] [duration]` — LLM-rendered narrative summary of
+  recent events. With a character id, recaps in that character's voice
+  using their own memory; without, an omniscient-narrator paragraph.
+  Default duration `1h`. Token order is indifferent.
 - `!snapshot` — dump a summary of current characters and places.
 
 The default DB is `vibebot.db` in the working directory; pass `--db
@@ -150,7 +154,6 @@ later passes:
   (`score = sim + λ·exp(-age)`); the skeleton stores recent events and
   retrieves the last *k*.
 - Rolling per-character summaries every N events.
-- `!recap [character]` in-character narration query.
 - Real LLM providers (OpenAI, Anthropic). The skeleton ships only an echo
   provider in `cmd/sim`; the `internal/llm` package is interface-only by
   design.

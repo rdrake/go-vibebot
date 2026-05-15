@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/afternet/go-vibebot/internal/api"
+	"github.com/afternet/go-vibebot/internal/llm"
 	"github.com/afternet/go-vibebot/internal/scene"
 	"github.com/afternet/go-vibebot/internal/store"
 )
@@ -143,6 +145,64 @@ func (a apiImpl) Log(ctx context.Context, since time.Duration) ([]api.LogEntry, 
 		})
 	}
 	return out, nil
+}
+
+// Recap rolls recent events into a short narrative. Narrator mode (empty
+// characterID) walks the global event log; character mode pulls the named
+// character's own Memory.Summary() so the recap reflects what *they*
+// experienced, not the omniscient view.
+func (a apiImpl) Recap(ctx context.Context, characterID api.CharacterID, since time.Duration) (string, error) {
+	if since <= 0 {
+		since = time.Hour
+	}
+	if characterID == "" {
+		return a.recapNarrator(ctx, since)
+	}
+	return a.recapCharacter(ctx, characterID, since)
+}
+
+func (a apiImpl) recapNarrator(ctx context.Context, since time.Duration) (string, error) {
+	entries, err := a.Log(ctx, since)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 {
+		return "(no events in window)", nil
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if e.Text == "" {
+			fmt.Fprintf(&b, "%s/%s/%s\n", e.SceneID, e.Actor, e.Kind)
+		} else {
+			fmt.Fprintf(&b, "%s/%s/%s: %s\n", e.SceneID, e.Actor, e.Kind, e.Text)
+		}
+	}
+	return a.w.model.Complete(ctx, llm.CompleteRequest{
+		System:      "You are an omniscient narrator summarizing what happened in a chaotic IRC roleplay session. Be brief and vivid: 2-3 sentences, present tense.",
+		Messages:    []llm.Message{{Role: llm.RoleUser, Content: fmt.Sprintf("Recap the last %s as a short paragraph:\n\n%s", since, b.String())}},
+		MaxTokens:   200,
+		Temperature: 0.7,
+	})
+}
+
+func (a apiImpl) recapCharacter(ctx context.Context, characterID api.CharacterID, since time.Duration) (string, error) {
+	chars, err := a.w.requestCharactersByID(ctx, []api.CharacterID{characterID})
+	if err != nil {
+		return "", err
+	}
+	ch := chars[0]
+	memSummary := ch.Memory.Summary()
+	if strings.TrimSpace(memSummary) == "" {
+		return fmt.Sprintf("%s has no memories yet.", ch.Name), nil
+	}
+	system := fmt.Sprintf("You are %s. %s\nRecap recent events from your own perspective and in your own voice: 2-3 sentences, present tense.", ch.Name, ch.Persona)
+	user := fmt.Sprintf("Your recent memories (oldest first):\n\n%s\nRecap the last %s in your voice.", memSummary, since)
+	return a.w.model.Complete(ctx, llm.CompleteRequest{
+		System:      system,
+		Messages:    []llm.Message{{Role: llm.RoleUser, Content: user}},
+		MaxTokens:   200,
+		Temperature: 0.7,
+	})
 }
 
 func (a apiImpl) Describe(_ context.Context, id string) (string, error) {
